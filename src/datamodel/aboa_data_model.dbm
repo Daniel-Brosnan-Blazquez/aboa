@@ -1,0 +1,287 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+CAUTION: Do not modify this file unless you know what you are doing.
+ Unexpected results may occur if the code is changed deliberately.
+-->
+<dbmodel pgmodeler-ver="1.2.3" use-changelog="false" max-obj-count="3"
+	 gen-disabled-objs-code="false" show-sys-schemas-rects="true"
+	 last-position="0,0" last-zoom="1"
+	 default-owner="postgres"
+	 layers="Default,"
+	 active-layers=""
+	 layer-name-colors="#000000"
+	 layer-rect-colors="#b4b4b4"
+	 show-layer-names="false" show-layer-rects="false">
+<role name="aboa"
+ inherit="true"
+ login="true">
+</role>
+
+<database name="aboadb" is-template="false" allow-conns="true">
+</database>
+
+<schema name="public" layers="0" fill-color="#e1e1e1" name-color="#000000" sql-disabled="true">
+</schema>
+
+<schema name="aboa" layers="0" fill-color="#e1e1e1" name-color="#000000">
+	<role name="aboa"/>
+</schema>
+
+<table name="archive_root_directories" layers="0" collapse-mode="2" max-obj-count="5" z-value="0">
+	<schema name="aboa"/>
+	<role name="aboa"/>
+	<position x="520" y="220"/>
+	<column name="root_directory_uuid" not-null="true">
+		<type name="uuid" length="0"/>
+	</column>
+	<column name="path" not-null="true">
+		<type name="text" length="0"/>
+	</column>
+	<column name="active_from" not-null="true">
+		<type name="timestamp" length="0"/>
+	</column>
+	<column name="active_until">
+		<type name="timestamp" length="0"/>
+	</column>
+	<column name="active" not-null="true">
+		<type name="bool" length="0"/>
+	</column>
+	<constraint name="archive_root_directories_pk" type="pk-constr" table="aboa.archive_root_directories">
+		<columns names="root_directory_uuid" ref-type="src-columns"/>
+	</constraint>
+</table>
+
+<table name="archived_files" layers="0" collapse-mode="2" max-obj-count="21" z-value="0">
+	<schema name="aboa"/>
+	<role name="aboa"/>
+	<position x="960" y="360"/>
+	<column name="file_uuid" not-null="true">
+		<type name="uuid" length="0"/>
+	</column>
+	<column name="name" not-null="true">
+		<type name="text" length="0"/>
+	</column>
+	<column name="path" not-null="true">
+		<type name="text" length="0"/>
+	</column>
+	<column name="reception_date" not-null="true">
+		<type name="timestamp" length="0"/>
+	</column>
+	<column name="archive_date" not-null="true">
+		<type name="timestamp" length="0"/>
+	</column>
+	<column name="file_size" not-null="true">
+		<type name="bigint" length="0"/>
+	</column>
+	<column name="available" not-null="true">
+		<type name="bool" length="0"/>
+	</column>
+	<column name="last_access_date">
+		<type name="timestamp" length="0"/>
+	</column>
+	<column name="file_group">
+		<type name="text" length="0"/>
+	</column>
+	<column name="file_type">
+		<type name="text" length="0"/>
+	</column>
+	<column name="file_class">
+		<type name="text" length="0"/>
+	</column>
+	<column name="file_version">
+		<type name="text" length="0"/>
+	</column>
+	<column name="validity_start_date">
+		<type name="timestamp" length="0"/>
+	</column>
+	<column name="validity_stop_date">
+		<type name="timestamp" length="0"/>
+	</column>
+	<column name="generation_date">
+		<type name="timestamp" length="0"/>
+	</column>
+	<column name="expiration_date">
+		<type name="timestamp" length="0"/>
+	</column>
+	<column name="removal_date">
+		<type name="timestamp" length="0"/>
+	</column>
+	<column name="checksum">
+		<type name="text" length="0"/>
+	</column>
+	<constraint name="archived_files_pk" type="pk-constr" table="aboa.archived_files">
+		<columns names="file_uuid" ref-type="src-columns"/>
+	</constraint>
+
+	<customidxs object-type="column">
+		<object name="root_directory_uuid" index="18"/>
+	</customidxs>
+	<customidxs object-type="constraint">
+		<object name="archive_root_directories_fk" index="1"/>
+	</customidxs></table>
+
+<relationship name="archive_root_directories_has_many_archived_files" type="rel1n" layers="0"
+	 src-col-pattern="{sc}"
+	 pk-pattern="{dt}_pk" uq-pattern="{dt}_uq"
+	 src-fk-pattern="{st}_fk"
+	 fk-idx-pattern="{st}_idx"
+	 custom-color="#5dbb63"
+	 src-table="aboa.archive_root_directories"
+	 dst-table="aboa.archived_files"
+	 src-required="true" dst-required="false"
+	del-action="RESTRICT"/>
+
+<table name="archive_operations" layers="0" collapse-mode="2" max-obj-count="6" z-value="0">
+	<schema name="aboa"/>
+	<role name="aboa"/>
+	<position x="1380" y="420"/>
+	<column name="operation_uuid" not-null="true">
+		<type name="uuid" length="0"/>
+	</column>
+	<column name="operation" not-null="true">
+		<type name="text" length="0"/>
+	</column>
+	<column name="time_stamp" not-null="true">
+		<type name="timestamp" length="0"/>
+	</column>
+	<column name="status" not-null="true">
+		<type name="integer" length="0"/>
+	</column>
+	<column name="message">
+		<type name="text" length="0"/>
+	</column>
+	<constraint name="archive_operations_pk" type="pk-constr" table="aboa.archive_operations">
+		<columns names="operation_uuid" ref-type="src-columns"/>
+	</constraint>
+
+	<customidxs object-type="column">
+		<object name="file_uuid" index="5"/>
+	</customidxs>
+	<customidxs object-type="constraint">
+		<object name="archived_files_fk" index="1"/>
+	</customidxs></table>
+
+<relationship name="archived_files_has_many_archive_operations" type="rel1n" layers="0"
+	 src-col-pattern="{sc}"
+	 pk-pattern="{dt}_pk" uq-pattern="{dt}_uq"
+	 src-fk-pattern="{st}_fk"
+	 fk-idx-pattern="{st}_idx"
+	 custom-color="#c97030"
+	 src-table="aboa.archived_files"
+	 dst-table="aboa.archive_operations"
+	 src-required="true" dst-required="false"
+	del-action="SET NULL"/>
+
+<index name="idx_archived_files_name" table="aboa.archived_files"
+	 concurrent="false" unique="false" fast-update="false" buffering="false" nulls-not-distinct="false"
+	 index-type="btree" factor="0">
+		<idxelement use-sorting="false">
+			<column name="name"/>
+		</idxelement>
+</index>
+
+<index name="idx_archived_files_path" table="aboa.archived_files"
+	 concurrent="false" unique="false" fast-update="false" buffering="false" nulls-not-distinct="false"
+	 index-type="btree" factor="0">
+		<idxelement use-sorting="false">
+			<column name="path"/>
+		</idxelement>
+</index>
+
+<index name="idx_archived_files_archive_date" table="aboa.archived_files"
+	 concurrent="false" unique="false" fast-update="false" buffering="false" nulls-not-distinct="false"
+	 index-type="btree" factor="0">
+		<idxelement use-sorting="false">
+			<column name="archive_date"/>
+		</idxelement>
+</index>
+
+<index name="idx_archived_files_generation_date" table="aboa.archived_files"
+	 concurrent="false" unique="false" fast-update="false" buffering="false" nulls-not-distinct="false"
+	 index-type="btree" factor="0">
+		<idxelement use-sorting="false">
+			<column name="generation_date"/>
+		</idxelement>
+</index>
+
+<index name="idx_archived_files_validity_start_date" table="aboa.archived_files"
+	 concurrent="false" unique="false" fast-update="false" buffering="false" nulls-not-distinct="false"
+	 index-type="btree" factor="0">
+		<idxelement use-sorting="false">
+			<column name="validity_start_date"/>
+		</idxelement>
+</index>
+
+<index name="idx_archived_files_validity_stop_date" table="aboa.archived_files"
+	 concurrent="false" unique="false" fast-update="false" buffering="false" nulls-not-distinct="false"
+	 index-type="btree" factor="0">
+		<idxelement use-sorting="false">
+			<column name="validity_stop_date"/>
+		</idxelement>
+</index>
+
+<index name="idx_archived_files_file_group" table="aboa.archived_files"
+	 concurrent="false" unique="false" fast-update="false" buffering="false" nulls-not-distinct="false"
+	 index-type="btree" factor="0">
+		<idxelement use-sorting="false">
+			<column name="file_group"/>
+		</idxelement>
+</index>
+
+<index name="idx_archived_files_file_type" table="aboa.archived_files"
+	 concurrent="false" unique="false" fast-update="false" buffering="false" nulls-not-distinct="false"
+	 index-type="btree" factor="0">
+		<idxelement use-sorting="false">
+			<column name="file_type"/>
+		</idxelement>
+</index>
+
+<index name="idx_archived_files_file_class" table="aboa.archived_files"
+	 concurrent="false" unique="false" fast-update="false" buffering="false" nulls-not-distinct="false"
+	 index-type="btree" factor="0">
+		<idxelement use-sorting="false">
+			<column name="file_class"/>
+		</idxelement>
+</index>
+
+<index name="idx_archived_files_file_version" table="aboa.archived_files"
+	 concurrent="false" unique="false" fast-update="false" buffering="false" nulls-not-distinct="false"
+	 index-type="btree" factor="0">
+		<idxelement use-sorting="false">
+			<column name="file_version"/>
+		</idxelement>
+</index>
+
+<index name="idx_archived_files_available" table="aboa.archived_files"
+	 concurrent="false" unique="false" fast-update="false" buffering="false" nulls-not-distinct="false"
+	 index-type="btree" factor="0">
+		<idxelement use-sorting="false">
+			<column name="available"/>
+		</idxelement>
+</index>
+
+<index name="idx_archived_files_expiration_date" table="aboa.archived_files"
+	 concurrent="false" unique="false" fast-update="false" buffering="false" nulls-not-distinct="false"
+	 index-type="btree" factor="0">
+		<idxelement use-sorting="false">
+			<column name="expiration_date"/>
+		</idxelement>
+</index>
+
+<index name="idx_archived_files_removal_date" table="aboa.archived_files"
+	 concurrent="false" unique="false" fast-update="false" buffering="false" nulls-not-distinct="false"
+	 index-type="btree" factor="0">
+		<idxelement use-sorting="false">
+			<column name="removal_date"/>
+		</idxelement>
+</index>
+
+<index name="idx_archive_root_directories_active" table="aboa.archive_root_directories"
+	 concurrent="false" unique="false" fast-update="false" buffering="false" nulls-not-distinct="false"
+	 index-type="btree" factor="0">
+		<idxelement use-sorting="false">
+			<column name="active"/>
+		</idxelement>
+</index>
+
+</dbmodel>
