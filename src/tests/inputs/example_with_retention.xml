@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<archive_configurations root_directory="/tmp/aboa_archive">
+  <archive_configuration file_group="invoices">
+    <file_mask>*.pdf</file_mask>
+    <file_directory>invoices</file_directory>
+    <retention_policy active="true" key="archive_date">P180D</retention_policy>
+  </archive_configuration>
+  <retention_policies>
+    <retention_policy active="true" key="validity_stop_date">P365D</retention_policy>
+  </retention_policies>
+</archive_configurations>

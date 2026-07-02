@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<archive_configurations root_directory="/tmp/aboa_archive">
+  <archive_configuration file_group="missing_attr">
+    <file_mask>*.txt</file_mask>
+    <file_directory>texts</file_directory>
+    <retention_policy key="archive_date">P30D</retention_policy>
+  </archive_configuration>
+</archive_configurations>

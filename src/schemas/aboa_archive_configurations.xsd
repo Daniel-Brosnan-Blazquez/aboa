@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:element name="archive_configurations">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="archive_configuration" minOccurs="0" maxOccurs="unbounded">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="file_mask" type="NonEmptyString"/>
+              <xs:element name="file_directory" type="NonUnknownDirectory"/>
+              <xs:element name="file_processor" type="xs:string" minOccurs="0"/>
+              <xs:element name="retention_policy" type="RetentionPolicyType" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence>
+            <xs:attribute name="file_group" type="NonEmptyString" use="required"/>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="retention_policies" minOccurs="0">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="retention_policy" type="RetentionPolicyType" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+      </xs:sequence>
+      <xs:attribute name="root_directory" type="NonEmptyString" use="required"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:simpleType name="NonEmptyString">
+    <xs:restriction base="xs:string">
+      <xs:minLength value="1"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="RetentionKey">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="last_access_date"/>
+      <xs:enumeration value="generation_date"/>
+      <xs:enumeration value="reception_date"/>
+      <xs:enumeration value="archive_date"/>
+      <xs:enumeration value="validity_stop_date"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:complexType name="RetentionPolicyType">
+    <xs:simpleContent>
+      <xs:extension base="xs:duration">
+        <xs:attribute name="active" type="xs:boolean" use="required"/>
+        <xs:attribute name="key" type="RetentionKey" use="required"/>
+      </xs:extension>
+    </xs:simpleContent>
+  </xs:complexType>
+
+  <xs:simpleType name="NonUnknownDirectory">
+    <xs:restriction base="xs:string">
+      <xs:minLength value="1"/>
+      <xs:pattern value="(.{1,6}|.{8,}|[^u].*|u[^n].*|un[^k].*|unk[^n].*|unkn[^o].*|unkno[^w].*)"/>
+    </xs:restriction>
+  </xs:simpleType>
+</xs:schema>
