@@ -136,6 +136,30 @@ class TestDatamodel(unittest.TestCase):
             "file_uuid": "",
         }
 
+    def test_retrieve_archive_operation_can_be_persisted_without_archived_file(self):
+        query = Query()
+        operation_uuid = uuid.uuid4()
+        operation = ArchiveOperation(
+            operation_uuid,
+            "retrieve",
+            datetime.datetime(2026, 7, 2, 10, 5, 0),
+            1,
+            message="requested file was not found",
+        )
+
+        try:
+            query.session.add(operation)
+            query.session.commit()
+
+            persisted = query.session.query(ArchiveOperation).filter_by(operation_uuid=str(operation_uuid)).one()
+
+            assert persisted.operation == "retrieve"
+            assert persisted.file_uuid is None
+            assert persisted.archivedFile is None
+            assert persisted.jsonify()["file_uuid"] == ""
+        finally:
+            query.close_session()
+
     def test_relationship_foreign_keys_are_serialized_after_persistence(self):
         query = Query()
         file_uuid = uuid.uuid4()

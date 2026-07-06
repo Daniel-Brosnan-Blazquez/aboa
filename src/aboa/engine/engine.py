@@ -85,19 +85,19 @@ exit_codes = {
     },
     "DELETE_FAILED": {
         "status": 8,
-        "message": "The delete operation ended unexpectedly with the error {}",
+        "message": "The delete operation ended unexpectedly with the error: {}",
     },
     "RETRIEVE_FAILED": {
         "status": 9,
-        "message": "The retrieve operation ended unexpectedly with the error {}",
+        "message": "The retrieve operation ended unexpectedly with the error: {}",
     },
     "RETENTION_FAILED": {
         "status": 10,
-        "message": "The retention operation ended unexpectedly with the error {}",
+        "message": "The retention operation ended unexpectedly with the error: {}",
     },
     "ARCHIVE_FAILED": {
         "status": 11,
-        "message": "The archive operation for file {} ended unexpectedly with the error {}",
+        "message": "The archive operation for file {} ended unexpectedly with the error: {}",
     },
 }
 
@@ -124,55 +124,14 @@ class Engine():
         else:
             self.session = session
         self.query = Query(session=self.session)
-        self.archive_xpath = None
-        self._load_default_configuration()
+        self.configuration_xpath = None
+        self.configuration_path = None
 
     def close_session(self):
         """
         Close the underlying SQLAlchemy session.
         """
         self.session.close()
-
-    def configure_archive(self, configuration_path):
-        """
-        Load and activate an archive configuration.
-
-        The consolidated parser returns an XPath evaluator. The engine keeps that
-        evaluator as runtime configuration and selects archive rules directly with
-        XPath expressions, following the EBOA triggering pattern.
-
-        :param configuration_path: XML archive configuration path
-        :type configuration_path: str
-
-        :return: active root-directory history entity
-        :rtype: aboa.datamodel.archived_files.ArchiveRootDirectory
-
-        :raises ArchiveConfigurationError: when the configuration is invalid
-        """
-        logger.info("Archive configuration request received for file {}".format(configuration_path))
-        try:
-            configuration_xpath = get_archive_configuration(configuration_path)
-            root_directory_path = configuration_xpath("string(/archive_configurations/@root_directory)")
-            now = datetime.datetime.utcnow()
-            for root_directory in self.session.query(ArchiveRootDirectory).filter(ArchiveRootDirectory.active == True).all():
-                root_directory.active = False
-                root_directory.active_until = now
-            root_directory = ArchiveRootDirectory(uuid.uuid4(), root_directory_path, now)
-            self.session.add(root_directory)
-            self.archive_xpath = configuration_xpath
-            self.session.commit()
-        except Exception as exc:
-            self.session.rollback()
-            message = exit_codes["CONFIGURATION_FAILED"]["message"].format(configuration_path, exc)
-            logger.error(message)
-            self._record_failure("configure", exit_codes["CONFIGURATION_FAILED"]["status"], message)
-            self.session.commit()
-            if isinstance(exc, ArchiveConfigurationError):
-                raise
-            raise ArchiveConfigurationError(message)
-
-        logger.info("Archive configuration request performed for file {}".format(configuration_path))
-        return root_directory
 
     def archive_file(self, file_path, reception_date=None, metadata=None, delete=False):
         """
@@ -201,24 +160,30 @@ class Engine():
         metadata = dict(metadata or {})
         reception_date = parse_datetime(reception_date) or datetime.datetime.utcnow()
         archive_date = datetime.datetime.utcnow()
+        failures = []        
 
+        # Load the archive configuration XML and synchronize the root-directory.
+        try:
+            self._load_archive_configuration(self.configuration_path)
+        except ArchiveConfigurationError as exc:
+            message = exit_codes["CONFIGURATION_FAILED"]["message"].format(self.configuration_path, exc)
+            logger.error(message)
+            failures.append((exit_codes["CONFIGURATION_FAILED"]["status"], message))
+            self._record_archive_failures(file_path, file_path, reception_date, archive_date, metadata, None, failures, root_directory)
+            raise ArchiveConfigurationError(message)
+
+        # Get the active root directory for the archive.
+        root_directory = self.query.get_active_root_directory()
+
+        # Check that the file exists
         if not os.path.exists(file_path):
             message = exit_codes["FILE_DOES_NOT_EXIST"]["message"].format(file_path)
             logger.error(message)
-            self._record_failure("archive", exit_codes["FILE_DOES_NOT_EXIST"]["status"], message)
-            self.session.commit()
+            failures.append((exit_codes["FILE_DOES_NOT_EXIST"]["status"], message))
+            self._record_archive_failures(file_path, file_path, reception_date, archive_date, metadata, None, failures, root_directory)
             raise ArchiveFileError(message)
 
-        root_directory = self.query.get_active_root_directory()
-        if root_directory is None:
-            message = exit_codes["ROOT_DIRECTORY_NOT_CONFIGURED"]["message"]
-            logger.error(message)
-            self._record_failure("archive", exit_codes["ROOT_DIRECTORY_NOT_CONFIGURED"]["status"], message)
-            self.session.commit()
-            raise ArchiveConfigurationError(message)
-
         configuration = self._match_configuration(file_path)
-        failures = []
         if configuration is None:
             # Requirement: files without a matching rule must still be archived.
             target_directory = "unknown"
@@ -245,8 +210,8 @@ class Engine():
         except Exception as exc:
             message = exit_codes["ARCHIVE_FAILED"]["message"].format(file_path, exc)
             logger.error(message)
-            self._record_failure("archive", exit_codes["ARCHIVE_FAILED"]["status"], message)
-            self.session.commit()
+            failures.append((exit_codes["ARCHIVE_FAILED"]["status"], message))
+            self._record_archive_failures(file_path, file_path, reception_date, archive_date, metadata, None, failures, root_directory)
             raise ArchiveFileError(message)
 
         if self.session.query(ArchivedFile).filter(ArchivedFile.checksum == checksum, ArchivedFile.available == True).first() is not None:
@@ -272,28 +237,11 @@ class Engine():
             except Exception as second_exc:
                 message = exit_codes["FILE_STORAGE_FAILED"]["message"].format(file_path, second_exc)
                 logger.error(message)
-                self._record_failure("archive", exit_codes["FILE_STORAGE_FAILED"]["status"], message)
-                self.session.commit()
+                failures.append((exit_codes["FILE_STORAGE_FAILED"]["status"], message))
+                self._record_archive_failures(file_path, destination_path, reception_date, archive_date, metadata, checksum, failures, root_directory)
                 raise ArchiveFileError(message)
 
-        archived_file = ArchivedFile(
-            uuid.uuid4(),
-            os.path.basename(file_path),
-            destination_path,
-            reception_date,
-            archive_date,
-            os.path.getsize(destination_path),
-            root_directory,
-            file_group=metadata.get("file_group"),
-            file_type=metadata.get("file_type"),
-            file_class=metadata.get("file_class"),
-            file_version=metadata.get("file_version"),
-            validity_start_date=parse_datetime(metadata.get("validity_start_date")),
-            validity_stop_date=parse_datetime(metadata.get("validity_stop_date")),
-            generation_date=parse_datetime(metadata.get("generation_date")),
-            expiration_date=parse_datetime(metadata.get("expiration_date")),
-            checksum=checksum,
-        )
+        archived_file = self._build_archived_file(file_path, destination_path, reception_date, archive_date, metadata, checksum, root_directory)
         self.session.add(archived_file)
         for status, message in failures:
             self._record_failure("archive", status, message, archived_file)
@@ -429,10 +377,10 @@ class Engine():
         :return: matching XML archive rule or None
         :rtype: lxml.etree._Element or None
         """
-        if self.archive_xpath is None:
+        if self.configuration_xpath is None:
             return None
         file_name = os.path.basename(file_path)
-        matching_configurations = self.archive_xpath(
+        matching_configurations = self.configuration_xpath(
             "/archive_configurations/archive_configuration[match(file_mask, $file_name)]",
             file_name=file_name,
         )
@@ -450,9 +398,9 @@ class Engine():
         :return: active retention policy XML nodes
         :rtype: list
         """
-        if self.archive_xpath is None:
+        if self.configuration_xpath is None:
             return []
-        policies = self.archive_xpath(
+        policies = self.configuration_xpath(
             "/archive_configurations/retention_policies/retention_policy[@active='true' or @active='1'] | "
             "/archive_configurations/archive_configuration/retention_policy[@active='true' or @active='1']"
         )
@@ -469,22 +417,130 @@ class Engine():
             return None
         return text
 
-    def _load_default_configuration(self):
+    def _load_archive_configuration(self, configuration_path=None):
         """
-        Load ``archive_configurations.xml`` from ``ABOA_RESOURCES_PATH`` if present.
+        Load archive configuration XML and synchronize root-directory metadata.
+
+        :param configuration_path: optional XML archive configuration path. When
+            omitted, ``archive_configurations.xml`` is loaded from
+            ``ABOA_RESOURCES_PATH``.
+        :type configuration_path: str or None
+
+        :raises ArchiveConfigurationError: when required configuration cannot load
         """
-        # Loading the default XML is best-effort so tests and scripts can construct
-        # an engine before a configuration file exists.
         try:
-            configuration_path = os.path.join(get_resources_path(), "archive_configurations.xml")
-        except Exception:
-            return
-        if not os.path.exists(configuration_path):
-            return
-        try:
-            self.archive_xpath = get_archive_configuration(configuration_path)
-        except Exception:
-            return
+            if configuration_path is None:
+                configuration_path = os.path.join(get_resources_path(), "archive_configurations.xml")
+
+            if not os.path.exists(configuration_path):
+                raise ArchiveConfigurationError("The configuration file {} does not exist".format(configuration_path))
+
+            try:
+                configuration_xml = etree.parse(configuration_path)
+            except Exception as exc:
+                raise ArchiveConfigurationError("The configuration file could not be parsed: {}".format(exc))
+
+            root_directory_path = configuration_xml.xpath("string(/archive_configurations/@root_directory)").strip()
+            root_directory = self.query.get_active_root_directory()
+            if root_directory is None or root_directory.path != root_directory_path:
+                now = datetime.datetime.utcnow()
+                for active_root_directory in self.session.query(ArchiveRootDirectory).filter(ArchiveRootDirectory.active == True).all():
+                    active_root_directory.active = False
+                    active_root_directory.active_until = now
+
+                if not os.path.exists(root_directory_path):
+                    os.makedirs(root_directory_path, exist_ok=True)
+
+                root_directory = ArchiveRootDirectory(uuid.uuid4(), root_directory_path, now)
+                self.session.add(root_directory)
+
+            configuration_xpath = get_archive_configuration(configuration_path)
+            self.configuration_xpath = configuration_xpath
+            self.configuration_path = configuration_path
+            self.session.commit()
+        except Exception as exc:
+            self.session.rollback()
+            raise ArchiveConfigurationError(exc)
+
+        return
+
+    def _build_archived_file(self, file_path, archive_path, reception_date, archive_date, metadata, checksum, root_directory, available=True):
+        """
+        Build an archived-file row with the common metadata mapping.
+
+        :param file_path: original input path
+        :type file_path: str
+        :param archive_path: path recorded in the archive inventory
+        :type archive_path: str
+        :param reception_date: reception timestamp
+        :type reception_date: datetime.datetime
+        :param archive_date: archive timestamp
+        :type archive_date: datetime.datetime
+        :param metadata: archive metadata
+        :type metadata: dict
+        :param checksum: file checksum, if available
+        :type checksum: str or None
+        :param root_directory: associated root-directory history entity
+        :type root_directory: aboa.datamodel.archived_files.ArchiveRootDirectory
+        :param available: logical availability flag
+        :type available: bool
+
+        :return: archived-file inventory entity
+        :rtype: aboa.datamodel.archived_files.ArchivedFile
+        """
+        file_size = os.path.getsize(archive_path) if os.path.exists(archive_path) else 0
+        return ArchivedFile(
+            uuid.uuid4(),
+            os.path.basename(file_path),
+            archive_path,
+            reception_date,
+            archive_date,
+            file_size,
+            root_directory,
+            available=available,
+            file_group=metadata.get("file_group"),
+            file_type=metadata.get("file_type"),
+            file_class=metadata.get("file_class"),
+            file_version=metadata.get("file_version"),
+            validity_start_date=parse_datetime(metadata.get("validity_start_date")),
+            validity_stop_date=parse_datetime(metadata.get("validity_stop_date")),
+            generation_date=parse_datetime(metadata.get("generation_date")),
+            expiration_date=parse_datetime(metadata.get("expiration_date")),
+            checksum=checksum,
+        )
+
+    def _record_archive_failures(self, file_path, archive_path, reception_date, archive_date, metadata, checksum, failures, root_directory):
+        """
+        Persist archive failure rows after creating their archived-file context.
+
+        :param file_path: original input path
+        :type file_path: str
+        :param archive_path: path recorded in the archive inventory
+        :type archive_path: str
+        :param reception_date: reception timestamp
+        :type reception_date: datetime.datetime
+        :param archive_date: archive timestamp
+        :type archive_date: datetime.datetime
+        :param metadata: archive metadata
+        :type metadata: dict
+        :param checksum: file checksum, if available
+        :type checksum: str or None
+        :param failures: failure statuses and messages
+        :type failures: list
+        :param root_directory: associated root-directory history entity, if known
+        :type root_directory: aboa.datamodel.archived_files.ArchiveRootDirectory or None
+        """
+        if root_directory is None:
+            root_directory = self.query.get_active_root_directory()
+
+        archived_file = None
+        if root_directory is not None:
+            archived_file = self._build_archived_file(file_path, archive_path, reception_date, archive_date, metadata, checksum, root_directory, available=False)
+            self.session.add(archived_file)
+
+        for status, message in failures:
+            self._record_failure("archive", status, message, archived_file)
+        self.session.commit()
 
     def _execute_processor(self, processor_name, file_path):
         """
@@ -560,16 +616,16 @@ class Engine():
 
     def _checksum(self, file_path):
         """
-        Calculate an MD5 checksum for a file.
+        Calculate a SHA-256 checksum for a file.
 
         :param file_path: path to the file to hash
         :type file_path: str
 
-        :return: hexadecimal MD5 checksum
+        :return: hexadecimal SHA-256 checksum
         :rtype: str
         """
         # Stream large files instead of reading them fully into memory.
-        digest = hashlib.md5()
+        digest = hashlib.sha256()
         with open(file_path, "rb") as input_file:
             for chunk in iter(lambda: input_file.read(1024 * 1024), b""):
                 digest.update(chunk)
