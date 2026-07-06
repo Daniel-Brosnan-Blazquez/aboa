@@ -3,12 +3,12 @@
 CAUTION: Do not modify this file unless you know what you are doing.
  Unexpected results may occur if the code is changed deliberately.
 -->
-<dbmodel pgmodeler-ver="1.2.3" use-changelog="false" max-obj-count="3"
+<dbmodel pgmodeler-ver="1.2.3" use-changelog="false" max-obj-count="4"
 	 gen-disabled-objs-code="false" show-sys-schemas-rects="true"
-	 last-position="0,0" last-zoom="1"
+	 last-position="0,0" last-zoom="1" scene-rect="0,0,1667.54,1076.8"
 	 default-owner="postgres"
-	 layers="Default,"
-	 active-layers=""
+	 layers="Default"
+	 active-layers="0"
 	 layer-name-colors="#000000"
 	 layer-rect-colors="#b4b4b4"
 	 show-layer-names="false" show-layer-rects="false">
@@ -27,7 +27,7 @@ CAUTION: Do not modify this file unless you know what you are doing.
 	<role name="aboa"/>
 </schema>
 
-<table name="archive_root_directories" layers="0" collapse-mode="2" max-obj-count="5" z-value="0">
+<table name="archive_root_directories" layers="0" collapse-mode="2" max-obj-count="6" z-value="0">
 	<schema name="aboa"/>
 	<role name="aboa"/>
 	<position x="520" y="220"/>
@@ -51,7 +51,7 @@ CAUTION: Do not modify this file unless you know what you are doing.
 	</constraint>
 </table>
 
-<table name="archived_files" layers="0" collapse-mode="2" max-obj-count="21" z-value="0">
+<table name="archived_files" layers="0" collapse-mode="2" max-obj-count="22" z-value="0">
 	<schema name="aboa"/>
 	<role name="aboa"/>
 	<position x="960" y="360"/>
@@ -131,7 +131,7 @@ CAUTION: Do not modify this file unless you know what you are doing.
 	 src-required="true" dst-required="false"
 	del-action="RESTRICT"/>
 
-<table name="archive_operations" layers="0" collapse-mode="2" max-obj-count="6" z-value="0">
+<table name="archive_operations" layers="0" collapse-mode="2" max-obj-count="7" z-value="0">
 	<schema name="aboa"/>
 	<role name="aboa"/>
 	<position x="1380" y="420"/>
@@ -169,7 +169,7 @@ CAUTION: Do not modify this file unless you know what you are doing.
 	 custom-color="#c97030"
 	 src-table="aboa.archived_files"
 	 dst-table="aboa.archive_operations"
-	 src-required="true" dst-required="false"
+	 src-required="false" dst-required="false"
 	del-action="SET NULL"/>
 
 <index name="idx_archived_files_name" table="aboa.archived_files"

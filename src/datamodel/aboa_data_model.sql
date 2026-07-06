@@ -87,7 +87,7 @@ CREATE TABLE aboa.archive_operations (
 	time_stamp timestamp NOT NULL,
 	status integer NOT NULL,
 	message text,
-	file_uuid uuid NOT NULL,
+	file_uuid uuid,
 	CONSTRAINT archive_operations_pk PRIMARY KEY (operation_uuid)
 );
 -- ddl-end --
