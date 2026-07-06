@@ -68,7 +68,7 @@ class ArchiveRootDirectory(Base):
         :rtype: dict
         """
         return {
-            "root_directory_uuid": self.root_directory_uuid,
+            "root_directory_uuid": str(self.root_directory_uuid),
             "path": self.path,
             "active_from": _isoformat(self.active_from),
             "active_until": _isoformat(self.active_until),
@@ -164,14 +164,14 @@ class ArchivedFile(Base):
         :rtype: dict
         """
         return {
-            "file_uuid": self.file_uuid,
+            "file_uuid": str(self.file_uuid),
             "name": self.name,
             "path": self.path,
             "reception_date": _isoformat(self.reception_date),
             "archive_date": _isoformat(self.archive_date),
             "file_size": self.file_size,
             "available": self.available,
-            "root_directory_uuid": self.root_directory_uuid,
+            "root_directory_uuid": str(self.root_directory_uuid),
             "last_access_date": _isoformat(self.last_access_date),
             "file_group": self.file_group,
             "file_type": self.file_type,
@@ -231,10 +231,10 @@ class ArchiveOperation(Base):
         :rtype: dict
         """
         return {
-            "operation_uuid": self.operation_uuid,
+            "operation_uuid": str(self.operation_uuid),
             "operation": self.operation,
             "time_stamp": _isoformat(self.time_stamp),
             "status": self.status,
             "message": self.message,
-            "file_uuid": self.file_uuid,
+            "file_uuid": str(self.file_uuid) if self.file_uuid else "",
         }

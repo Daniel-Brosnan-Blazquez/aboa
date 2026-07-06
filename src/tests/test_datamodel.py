@@ -133,7 +133,7 @@ class TestDatamodel(unittest.TestCase):
             "time_stamp": "2026-07-02T10:05:00",
             "status": 1,
             "message": "processor failed",
-            "file_uuid": None,
+            "file_uuid": "",
         }
 
     def test_relationship_foreign_keys_are_serialized_after_persistence(self):
@@ -162,7 +162,7 @@ class TestDatamodel(unittest.TestCase):
             query.session.add(operation)
             query.session.commit()
 
-            assert archived_file.jsonify()["root_directory_uuid"] == self.root_directory.root_directory_uuid
+            assert archived_file.jsonify()["root_directory_uuid"] == str(self.root_directory.root_directory_uuid)
             assert operation.jsonify()["file_uuid"] == str(file_uuid)
         finally:
             query.close_session()
