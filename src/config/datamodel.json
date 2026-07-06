@@ -1,0 +1,12 @@
+{
+  "DDBB_CONFIGURATION": {
+    "user": "aboa",
+    "host": "localhost",
+    "port": 5432,
+    "database": "aboadb",
+    "db_api": "postgresql",
+    "pool_size": 100,
+    "max_overflow": 100
+  }
+}
+

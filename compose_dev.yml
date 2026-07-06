@@ -1,20 +1,11 @@
 services:
 
    aboa_db:
-      image: postgis/postgis:16-3.4
+      image: mdillon/postgis
       container_name: aboa_db
       restart: always
       shm_size: 512M
-      command: postgres -c max_connections=500 -c max_locks_per_transaction=500
-      environment:
-         - POSTGRES_DB=aboadb
-         - POSTGRES_USER=aboa
-         - POSTGRES_HOST_AUTH_METHOD=trust
-      healthcheck:
-         test: ["CMD-SHELL", "pg_isready -U aboa -d aboadb"]
-         interval: 10s
-         timeout: 5s
-         retries: 5
+      command: -c max_connections=5000 -c max_locks_per_transaction=5000
       networks:
          - boa_network
 
@@ -34,9 +25,6 @@ services:
          - PYTHONDONTWRITEBYTECODE=1
       volumes:
          - .:/aboa:rw
-      depends_on:
-         aboa_db:
-            condition: service_healthy
       shm_size: 512M
       networks:
          - boa_network

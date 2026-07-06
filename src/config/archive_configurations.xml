@@ -1,0 +1,8 @@
+<archive_configurations root_directory="/tmp/aboa_archive">
+  <archive_configuration file_group="default">
+    <file_mask>*</file_mask>
+    <file_directory>default</file_directory>
+    <file_processor></file_processor>
+  </archive_configuration>
+</archive_configurations>
+

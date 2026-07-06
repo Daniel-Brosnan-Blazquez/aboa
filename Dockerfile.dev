@@ -62,4 +62,7 @@ WORKDIR /aboa
 
 USER boa
 
+# Install datamodel
+RUN ln -s /aboa/src/datamodel/aboa_data_model.sql /datamodel
+
 CMD ["/bin/bash", "-c", "/aboa/src/scripts/start_aboa.sh"]
