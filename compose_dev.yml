@@ -21,7 +21,7 @@ services:
          - ABOA_RESOURCES_PATH=/aboa/src/config
          - ABOA_LOG_PATH=/log
          - ABOA_SCHEMAS_PATH=/aboa/src/schemas
-         - ABOA_ARCHIVE_PATH=/aboa_archive
+         - ABOA_DEFAULT_ARCHIVE_PATH=/aboa_archive
          - PYTHONDONTWRITEBYTECODE=1
       volumes:
          - .:/aboa:rw

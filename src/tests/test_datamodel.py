@@ -1,3 +1,7 @@
+"""
+Tests for archive inventory SQLAlchemy models and JSON serialization.
+"""
+
 import datetime
 import shutil
 import tempfile
@@ -10,14 +14,26 @@ from aboa.engine.query import Query
 
 
 class TestDatamodel(unittest.TestCase):
+    """
+    Unit and persistence tests for archived file, root, and operation models.
+    """
+
     def setUp(self):
+        """
+        Prepare a clean inventory and a reusable root-directory model.
+        """
         query = Query()
         query.clear_db()
         query.close_session()
+        # Most model tests can serialize objects without persistence, but they all
+        # need a root-directory relationship object to mirror production rows.
         self.test_root = Path(tempfile.mkdtemp(prefix="aboa_test_"))
         self.root_directory = ArchiveRootDirectory(uuid.uuid4(), "/tmp/archive", datetime.datetime(2026, 7, 2), active=True)
 
     def tearDown(self):
+        """
+        Clear persisted rows and remove temporary filesystem state.
+        """
         self.root_directory = None
         query = Query()
         query.clear_db()
@@ -25,6 +41,9 @@ class TestDatamodel(unittest.TestCase):
         shutil.rmtree(str(self.test_root), ignore_errors=True)
 
     def test_archived_file_jsonify(self):
+        """
+        Serialize all archived-file fields into JSON-ready values.
+        """
         file_uuid = uuid.uuid4()
         archived_file = ArchivedFile(
             file_uuid,
@@ -50,6 +69,8 @@ class TestDatamodel(unittest.TestCase):
 
         structure = archived_file.jsonify()
 
+        # Datetimes are expected as ISO strings and identifiers as text so the CLI
+        # can emit JSON directly from jsonify results.
         assert structure["file_uuid"] == str(file_uuid)
         assert structure["name"] == "sample.txt"
         assert structure["path"] == "/tmp/archive/texts/2026/07/02/sample.txt"
@@ -70,6 +91,9 @@ class TestDatamodel(unittest.TestCase):
         assert structure["checksum"] == "abc123"
 
     def test_archived_file_jsonify_handles_optional_values(self):
+        """
+        Serialize missing optional archived-file metadata as null values.
+        """
         archived_file = ArchivedFile(
             uuid.uuid4(),
             "sample.txt",
@@ -96,6 +120,9 @@ class TestDatamodel(unittest.TestCase):
         assert structure["checksum"] is None
 
     def test_archive_root_directory_jsonify(self):
+        """
+        Serialize archive root-directory history rows.
+        """
         root_uuid = uuid.uuid4()
         root_directory = ArchiveRootDirectory(
             root_uuid,
@@ -116,6 +143,9 @@ class TestDatamodel(unittest.TestCase):
         }
 
     def test_archive_operation_jsonify(self):
+        """
+        Serialize an archive operation without an attached file.
+        """
         operation_uuid = uuid.uuid4()
         operation = ArchiveOperation(
             operation_uuid,
@@ -137,6 +167,9 @@ class TestDatamodel(unittest.TestCase):
         }
 
     def test_retrieve_archive_operation_can_be_persisted_without_archived_file(self):
+        """
+        Persist retrieve failures that are not tied to an archived-file row.
+        """
         query = Query()
         operation_uuid = uuid.uuid4()
         operation = ArchiveOperation(
@@ -148,6 +181,8 @@ class TestDatamodel(unittest.TestCase):
         )
 
         try:
+            # Retrieval can fail before a concrete ArchivedFile is available, so
+            # the nullable relationship must survive a database round trip.
             query.session.add(operation)
             query.session.commit()
 
@@ -161,6 +196,9 @@ class TestDatamodel(unittest.TestCase):
             query.close_session()
 
     def test_relationship_foreign_keys_are_serialized_after_persistence(self):
+        """
+        Serialize foreign keys populated through SQLAlchemy relationships.
+        """
         query = Query()
         file_uuid = uuid.uuid4()
         archived_file = ArchivedFile(
@@ -181,6 +219,8 @@ class TestDatamodel(unittest.TestCase):
         )
 
         try:
+            # Persist the full relationship graph so SQLAlchemy fills the foreign
+            # key columns that jsonify exposes to API and CLI callers.
             query.session.add(self.root_directory)
             query.session.add(archived_file)
             query.session.add(operation)

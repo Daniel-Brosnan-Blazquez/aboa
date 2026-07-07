@@ -1,3 +1,7 @@
+"""
+Tests for archive engine configuration, storage, and failure handling.
+"""
+
 import os
 import shutil
 import sys
@@ -6,12 +10,21 @@ from pathlib import Path
 
 from aboa.datamodel.archived_files import ArchivedFile, ArchiveOperation, ArchiveRootDirectory
 from aboa.engine.engine import Engine
-from aboa.engine.errors import ArchiveFileError
+from aboa.engine.errors import ArchiveConfigurationError, ArchiveDeletionError, ArchiveFileError, ArchiveRetrievalError
 from aboa.engine.query import Query
 
 
 class TestEngine(unittest.TestCase):
+    """
+    Integration-style tests for archive engine mutations and failure recording.
+    """
+
     def setUp(self):
+        """
+        Prepare a clean inventory and filesystem roots for each engine test.
+        """
+        # Engine tests share the configured database, so each test starts from an
+        # empty inventory and recreates the POSIX archive roots it needs.
         query = Query()
         query.clear_db()
         query.close_session()
@@ -20,13 +33,14 @@ class TestEngine(unittest.TestCase):
         self.second_archive_root = Path("/tmp/aboa_test_engine_archive_changed")
         shutil.rmtree(str(self.archive_root), ignore_errors=True)
         shutil.rmtree(str(self.second_archive_root), ignore_errors=True)
-        self.archive_root.mkdir()
-        self.second_archive_root.mkdir()
         self.configuration_file = str(self.inputs_path / "engine_archive_configuration.xml")
         self.engine = Engine()
-        self.engine._load_archive_configuration(self.configuration_file)
+        self.engine.set_configuration_path(self.configuration_file)
 
     def tearDown(self):
+        """
+        Close sessions and remove test archive roots.
+        """
         self.engine.close_session()
         query = Query()
         query.close_session()
@@ -34,12 +48,39 @@ class TestEngine(unittest.TestCase):
         shutil.rmtree(str(self.second_archive_root), ignore_errors=True)
 
     def input_file(self, name):
+        """
+        Return a fixture input path by file name.
+        """
         return self.inputs_path / name
 
+    def archive_and_get(self, input_file, engine=None, **kwargs):
+        """
+        Archive a fixture and return the persisted inventory row.
+        """
+        engine = engine or self.engine
+        assert engine.archive_file(str(input_file), **kwargs) is None
+        return engine.query.get_archived_files(
+            names={"filter": [Path(input_file).name], "op": "in"},
+            selection="last",
+        )[0]
+
+    def test_set_configuration_path(self):
+        """
+        Store a custom configuration path for future archive operations.
+        """
+        configuration_path = str(self.inputs_path / "engine_archive_changed_root_configuration.xml")
+
+        self.engine.set_configuration_path(configuration_path)
+
+        assert self.engine.configuration_path == configuration_path
+
     def test_archive_matching_file(self):
+        """
+        Archive a file that matches the configured text rule.
+        """
         input_file = self.input_file("sample.txt")
 
-        archived_file = self.engine.archive_file(str(input_file))
+        archived_file = self.archive_and_get(input_file)
 
         assert archived_file.file_group == "group_a"
         assert os.path.exists(archived_file.path)
@@ -53,37 +94,48 @@ class TestEngine(unittest.TestCase):
         assert archived_file.file_size == os.path.getsize(input_file)
 
     def test_archive_unmatched_file_goes_to_unknown(self):
+        """
+        Archive unmatched files under the unknown fallback directory.
+        """
         input_file = self.input_file("sample.bin")
 
-        archived_file = self.engine.archive_file(str(input_file))
+        archived_file = self.archive_and_get(input_file)
 
         assert archived_file.file_group == "unknown"
         assert "unknown" in archived_file.path.split(os.sep)
 
     def test_changing_root_directory_archives_without_restart(self):
+        """
+        Use a reloaded XML configuration root without recreating the engine.
+        """
         first_input = self.input_file("root_change_first.txt")
         second_input = self.input_file("root_change_second.txt")
         second_configuration = self.input_file("engine_archive_changed_root_configuration.xml")
 
-        first_archive = self.engine.archive_file(str(first_input))
-        self.engine._load_archive_configuration(str(second_configuration))
-        second_archive = self.engine.archive_file(str(second_input))
+        first_archive = self.archive_and_get(first_input)
+        # Changing configuration should deactivate the first root and make
+        # subsequent archives land below the new root directory.
+        self.engine.set_configuration_path(str(second_configuration))
+        second_archive = self.archive_and_get(second_input)
 
         assert os.path.exists(first_archive.path)
         assert os.path.exists(second_archive.path)
         assert os.path.commonpath([str(self.archive_root), first_archive.path]) == str(self.archive_root)
         assert os.path.commonpath([str(self.second_archive_root), second_archive.path]) == str(self.second_archive_root)
-        assert os.path.commonpath([str(self.second_archive_root), first_archive.path]) != str(self.second_archive_root)
-        assert os.path.commonpath([str(self.archive_root), second_archive.path]) != str(self.archive_root)
 
     def test_archive_file_reloads_configuration_and_repairs_stale_root_directory(self):
+        """
+        Repair stale active root-directory metadata before archiving.
+        """
         input_file = self.input_file("root_change_first.txt")
+        self.archive_and_get(self.input_file("root_change_second.txt"))
+        # Simulate a database row that no longer matches the XML configuration;
+        # archive_file reloads the configuration and restores a single active root.
         stale_root_directory = self.engine.query.get_active_root_directory()
         stale_root_directory.path = str(self.second_archive_root)
-        self.engine.archive_xpath = None
         self.engine.session.commit()
 
-        archived_file = self.engine.archive_file(str(input_file))
+        archived_file = self.archive_and_get(input_file)
         active_root_directory = self.engine.query.get_active_root_directory()
         active_root_directories = self.engine.session.query(ArchiveRootDirectory).filter(ArchiveRootDirectory.active == True).all()
 
@@ -92,16 +144,53 @@ class TestEngine(unittest.TestCase):
         assert os.path.commonpath([str(self.archive_root), archived_file.path]) == str(self.archive_root)
         assert len(active_root_directories) == 1
 
+    def test_archive_file_records_failure_and_raises_when_configuration_reload_fails(self):
+        """
+        Record archive failure metadata when configuration reload fails.
+        """
+        default_archive_root = Path("/tmp/aboa_test_engine_default_archive")
+        shutil.rmtree(str(default_archive_root), ignore_errors=True)
+        previous_default_archive_path = os.environ.get("ABOA_DEFAULT_ARCHIVE_PATH")
+        os.environ["ABOA_DEFAULT_ARCHIVE_PATH"] = str(default_archive_root)
+        try:
+            self.engine.set_configuration_path(str(self.inputs_path / "does_not_exist.xml"))
+            # archive_file converts the configuration failure into a persisted
+            # failed operation associated with an unavailable archived-file row.
+            with self.assertRaises(ArchiveConfigurationError):
+                self.engine.archive_file(str(self.input_file("sample.txt")))
+            active_root_directory = self.engine.query.get_active_root_directory()
+            archived_files = self.engine.session.query(ArchivedFile).all()
+            operations = self.engine.session.query(ArchiveOperation).all()
+
+            assert active_root_directory.path == str(default_archive_root)
+            assert default_archive_root.exists()
+            assert len(archived_files) == 1
+            assert archived_files[0].path == str(self.input_file("sample.txt"))
+            assert archived_files[0].available is False
+            assert archived_files[0].rootDirectory.path == str(default_archive_root)
+            assert len(operations) == 1
+            assert operations[0].file_uuid == archived_files[0].file_uuid
+        finally:
+            if previous_default_archive_path is None:
+                os.environ.pop("ABOA_DEFAULT_ARCHIVE_PATH", None)
+            else:
+                os.environ["ABOA_DEFAULT_ARCHIVE_PATH"] = previous_default_archive_path
+            shutil.rmtree(str(default_archive_root), ignore_errors=True)
+
     def test_archive_processor_metadata(self):
+        """
+        Merge processor-produced metadata into the archived-file inventory row.
+        """
         inputs_path = str(self.inputs_path)
+        # Processor fixtures are plain modules in the inputs directory.
         if inputs_path not in sys.path:
             sys.path.insert(0, inputs_path)
         configuration = self.inputs_path / "engine_metadata_configuration.xml"
         engine = Engine()
-        engine._load_archive_configuration(str(configuration))
+        engine.set_configuration_path(str(configuration))
         input_file = self.input_file("sample.txt")
 
-        archived_file = engine.archive_file(str(input_file))
+        archived_file = self.archive_and_get(input_file, engine=engine)
 
         assert archived_file.file_type == "text"
         assert archived_file.file_class == "AUX"
@@ -110,15 +199,19 @@ class TestEngine(unittest.TestCase):
         engine.close_session()
 
     def test_archive_processor_failure_goes_to_error(self):
+        """
+        Archive files in the error area when their configured processor fails.
+        """
         inputs_path = str(self.inputs_path)
+        # Processor fixtures are plain modules in the inputs directory.
         if inputs_path not in sys.path:
             sys.path.insert(0, inputs_path)
         configuration = self.inputs_path / "engine_failure_configuration.xml"
         engine = Engine()
-        engine._load_archive_configuration(str(configuration))
+        engine.set_configuration_path(str(configuration))
         input_file = self.input_file("sample.txt")
 
-        archived_file = engine.archive_file(str(input_file))
+        archived_file = self.archive_and_get(input_file, engine=engine)
         operations = engine.session.query(ArchiveOperation).all()
 
         assert "error" in archived_file.path.split(os.sep)
@@ -126,7 +219,32 @@ class TestEngine(unittest.TestCase):
         assert operations[0].file_uuid == archived_file.file_uuid
         engine.close_session()
 
+    def test_archive_checksum_failure_goes_to_error(self):
+        """
+        Archive files in the error area when checksum calculation fails.
+        """
+        input_file = self.input_file("sample.txt")
+        original_checksum = self.engine._checksum
+
+        def fail_checksum(file_path):
+            raise OSError("checksum read failed")
+
+        try:
+            self.engine._checksum = fail_checksum
+            archived_file = self.archive_and_get(input_file)
+        finally:
+            self.engine._checksum = original_checksum
+        operations = self.engine.session.query(ArchiveOperation).all()
+
+        assert "error" in archived_file.path.split(os.sep)
+        assert archived_file.checksum is None
+        assert len(operations) == 1
+        assert operations[0].file_uuid == archived_file.file_uuid
+
     def test_archive_missing_file_records_failure_with_archived_file(self):
+        """
+        Persist failure context when the requested input file does not exist.
+        """
         missing_file = self.input_file("missing.txt")
 
         with self.assertRaises(ArchiveFileError):
@@ -142,12 +260,59 @@ class TestEngine(unittest.TestCase):
         assert archived_files[0].file_size == 0
         assert operations[0].file_uuid == archived_files[0].file_uuid
 
+    def test_retrieve_files_raises_archive_retrieval_error_on_failure(self):
+        """
+        Convert retrieval failures into ArchiveRetrievalError.
+        """
+        original_get_archived_files = self.engine.query.get_archived_files
+
+        def fail_get_archived_files(**kwargs):
+            raise ValueError("retrieval failed")
+
+        try:
+            self.engine.query.get_archived_files = fail_get_archived_files
+            with self.assertRaises(ArchiveRetrievalError):
+                self.engine.retrieve_files()
+        finally:
+            self.engine.query.get_archived_files = original_get_archived_files
+        operations = self.engine.session.query(ArchiveOperation).all()
+
+        assert len(operations) == 1
+        assert operations[0].operation == "retrieve"
+        assert operations[0].status == 9
+        assert "retrieval failed" in operations[0].message
+
     def test_delete_logical_and_physical(self):
+        """
+        Mark an archived file unavailable and remove its physical payload.
+        """
         input_file = self.input_file("sample.txt")
-        archived_file = self.engine.archive_file(str(input_file))
+        archived_file = self.archive_and_get(input_file)
 
         deleted = self.engine.delete_files(file_uuids=[archived_file.file_uuid], physical_delete=True)
 
         assert deleted[0].available is False
         assert deleted[0].removal_date is not None
         assert not os.path.exists(deleted[0].path)
+
+    def test_delete_files_raises_archive_deletion_error_on_failure(self):
+        """
+        Convert deletion failures into ArchiveDeletionError.
+        """
+        original_get_archived_files = self.engine.query.get_archived_files
+
+        def fail_get_archived_files(**kwargs):
+            raise ValueError("deletion failed")
+
+        try:
+            self.engine.query.get_archived_files = fail_get_archived_files
+            with self.assertRaises(ArchiveDeletionError):
+                self.engine.delete_files()
+        finally:
+            self.engine.query.get_archived_files = original_get_archived_files
+        operations = self.engine.session.query(ArchiveOperation).all()
+
+        assert len(operations) == 1
+        assert operations[0].operation == "delete"
+        assert operations[0].status == 8
+        assert "deletion failed" in operations[0].message
