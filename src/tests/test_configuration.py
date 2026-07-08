@@ -103,6 +103,13 @@ class TestConfiguration(unittest.TestCase):
         with self.assertRaises(ArchiveConfigurationError):
             get_archive_configuration(input_configuration("example_invalid_key.xml"))
 
+    def test_last_access_date_retention_key_is_rejected(self):
+        """
+        Reject last-access timestamps as retention policy keys.
+        """
+        with self.assertRaises(ArchiveConfigurationError):
+            get_archive_configuration(input_configuration("example_invalid_last_access_key.xml"))
+
     def test_invalid_duration_configuration_is_rejected(self):
         """
         Reject retention policy durations that are not XML duration values.

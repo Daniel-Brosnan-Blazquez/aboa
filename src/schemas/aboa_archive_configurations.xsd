@@ -34,7 +34,6 @@
 
   <xs:simpleType name="RetentionKey">
     <xs:restriction base="xs:string">
-      <xs:enumeration value="last_access_date"/>
       <xs:enumeration value="generation_date"/>
       <xs:enumeration value="reception_date"/>
       <xs:enumeration value="archive_date"/>
