@@ -3,7 +3,7 @@
 CAUTION: Do not modify this file unless you know what you are doing.
  Unexpected results may occur if the code is changed deliberately.
 -->
-<dbmodel pgmodeler-ver="1.2.3" use-changelog="false" max-obj-count="4"
+<dbmodel pgmodeler-ver="1.2.3" use-changelog="false" max-obj-count="5"
 	 gen-disabled-objs-code="false" show-sys-schemas-rects="true"
 	 last-position="0,0" last-zoom="1" scene-rect="0,0,1667.54,1076.8"
 	 default-owner="postgres"
@@ -51,7 +51,34 @@ CAUTION: Do not modify this file unless you know what you are doing.
 	</constraint>
 </table>
 
-<table name="archived_files" layers="0" collapse-mode="2" max-obj-count="22" z-value="0">
+<table name="archive_configurations" layers="0" collapse-mode="2" max-obj-count="7" z-value="0">
+	<schema name="aboa"/>
+	<role name="aboa"/>
+	<position x="80" y="220"/>
+	<column name="archive_configuration_uuid" not-null="true">
+		<type name="uuid" length="0"/>
+	</column>
+	<column name="path" not-null="true">
+		<type name="text" length="0"/>
+	</column>
+	<column name="active_from" not-null="true">
+		<type name="timestamp" length="0"/>
+	</column>
+	<column name="active_until">
+		<type name="timestamp" length="0"/>
+	</column>
+	<column name="active" not-null="true">
+		<type name="bool" length="0"/>
+	</column>
+	<column name="content" not-null="true">
+		<type name="text" length="0"/>
+	</column>
+	<constraint name="archive_configurations_pk" type="pk-constr" table="aboa.archive_configurations">
+		<columns names="archive_configuration_uuid" ref-type="src-columns"/>
+	</constraint>
+</table>
+
+<table name="archived_files" layers="0" collapse-mode="2" max-obj-count="25" z-value="0">
 	<schema name="aboa"/>
 	<role name="aboa"/>
 	<position x="960" y="360"/>
@@ -106,15 +133,24 @@ CAUTION: Do not modify this file unless you know what you are doing.
 	<column name="removal_date">
 		<type name="timestamp" length="0"/>
 	</column>
+	<column name="removal_justification">
+		<type name="text" length="0"/>
+	</column>
 	<column name="checksum">
 		<type name="text" length="0"/>
+	</column>
+	<column name="archive_configuration_uuid">
+		<type name="uuid" length="0"/>
+	</column>
+	<column name="delete_archive_configuration_uuid">
+		<type name="uuid" length="0"/>
 	</column>
 	<constraint name="archived_files_pk" type="pk-constr" table="aboa.archived_files">
 		<columns names="file_uuid" ref-type="src-columns"/>
 	</constraint>
 
 	<customidxs object-type="column">
-		<object name="root_directory_uuid" index="18"/>
+		<object name="root_directory_uuid" index="21"/>
 	</customidxs>
 	<customidxs object-type="constraint">
 		<object name="archive_root_directories_fk" index="1"/>
@@ -130,6 +166,28 @@ CAUTION: Do not modify this file unless you know what you are doing.
 	 dst-table="aboa.archived_files"
 	 src-required="true" dst-required="false"
 	del-action="RESTRICT"/>
+
+<relationship name="archive_configurations_has_many_archived_files" type="rel1n" layers="0"
+	 src-col-pattern="archive_configuration_uuid"
+	 pk-pattern="{dt}_pk" uq-pattern="{dt}_uq"
+	 src-fk-pattern="archived_files_archive_configurations_fk"
+	 fk-idx-pattern="idx_archived_files_archive_configuration_uuid"
+	 custom-color="#3d7fc4"
+	 src-table="aboa.archive_configurations"
+	 dst-table="aboa.archived_files"
+	 src-required="false" dst-required="false"
+	del-action="SET NULL"/>
+
+<relationship name="archive_configurations_has_many_deleted_archived_files" type="rel1n" layers="0"
+	 src-col-pattern="delete_archive_configuration_uuid"
+	 pk-pattern="{dt}_pk" uq-pattern="{dt}_uq"
+	 src-fk-pattern="archived_files_delete_archive_configurations_fk"
+	 fk-idx-pattern="idx_archived_files_delete_archive_configuration_uuid"
+	 custom-color="#7f55a4"
+	 src-table="aboa.archive_configurations"
+	 dst-table="aboa.archived_files"
+	 src-required="false" dst-required="false"
+	del-action="SET NULL"/>
 
 <table name="archive_operations" layers="0" collapse-mode="2" max-obj-count="7" z-value="0">
 	<schema name="aboa"/>
@@ -276,7 +334,39 @@ CAUTION: Do not modify this file unless you know what you are doing.
 		</idxelement>
 </index>
 
+<index name="idx_archived_files_removal_justification" table="aboa.archived_files"
+	 concurrent="false" unique="false" fast-update="false" buffering="false" nulls-not-distinct="false"
+	 index-type="btree" factor="0">
+		<idxelement use-sorting="false">
+			<column name="removal_justification"/>
+		</idxelement>
+</index>
+
+<index name="idx_archived_files_archive_configuration_uuid" table="aboa.archived_files"
+	 concurrent="false" unique="false" fast-update="false" buffering="false" nulls-not-distinct="false"
+	 index-type="btree" factor="0">
+		<idxelement use-sorting="false">
+			<column name="archive_configuration_uuid"/>
+		</idxelement>
+</index>
+
+<index name="idx_archived_files_delete_archive_configuration_uuid" table="aboa.archived_files"
+	 concurrent="false" unique="false" fast-update="false" buffering="false" nulls-not-distinct="false"
+	 index-type="btree" factor="0">
+		<idxelement use-sorting="false">
+			<column name="delete_archive_configuration_uuid"/>
+		</idxelement>
+</index>
+
 <index name="idx_archive_root_directories_active" table="aboa.archive_root_directories"
+	 concurrent="false" unique="false" fast-update="false" buffering="false" nulls-not-distinct="false"
+	 index-type="btree" factor="0">
+		<idxelement use-sorting="false">
+			<column name="active"/>
+		</idxelement>
+</index>
+
+<index name="idx_archive_configurations_active" table="aboa.archive_configurations"
 	 concurrent="false" unique="false" fast-update="false" buffering="false" nulls-not-distinct="false"
 	 index-type="btree" factor="0">
 		<idxelement use-sorting="false">

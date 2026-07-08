@@ -44,6 +44,21 @@ CREATE TABLE aboa.archive_root_directories (
 ALTER TABLE aboa.archive_root_directories OWNER TO aboa;
 -- ddl-end --
 
+-- object: aboa.archive_configurations | type: TABLE --
+-- DROP TABLE IF EXISTS aboa.archive_configurations CASCADE;
+CREATE TABLE aboa.archive_configurations (
+	archive_configuration_uuid uuid NOT NULL,
+	path text NOT NULL,
+	active_from timestamp NOT NULL,
+	active_until timestamp,
+	active bool NOT NULL,
+	content text NOT NULL,
+	CONSTRAINT archive_configurations_pk PRIMARY KEY (archive_configuration_uuid)
+);
+-- ddl-end --
+ALTER TABLE aboa.archive_configurations OWNER TO aboa;
+-- ddl-end --
+
 -- object: aboa.archived_files | type: TABLE --
 -- DROP TABLE IF EXISTS aboa.archived_files CASCADE;
 CREATE TABLE aboa.archived_files (
@@ -64,8 +79,13 @@ CREATE TABLE aboa.archived_files (
 	generation_date timestamp,
 	expiration_date timestamp,
 	removal_date timestamp,
+	removal_justification text,
 	checksum text,
+	archive_configuration_uuid uuid,
+	delete_archive_configuration_uuid uuid,
 	root_directory_uuid uuid NOT NULL,
+	archive_configuration_uuid1 uuid,
+	delete_archive_configuration_uuid1 uuid,
 	CONSTRAINT archived_files_pk PRIMARY KEY (file_uuid)
 );
 -- ddl-end --
@@ -77,6 +97,20 @@ ALTER TABLE aboa.archived_files OWNER TO aboa;
 ALTER TABLE aboa.archived_files ADD CONSTRAINT archive_root_directories_fk FOREIGN KEY (root_directory_uuid)
 REFERENCES aboa.archive_root_directories (root_directory_uuid) MATCH FULL
 ON DELETE RESTRICT ON UPDATE CASCADE;
+-- ddl-end --
+
+-- object: archived_files_archive_configurations_fk | type: CONSTRAINT --
+-- ALTER TABLE aboa.archived_files DROP CONSTRAINT IF EXISTS archived_files_archive_configurations_fk CASCADE;
+ALTER TABLE aboa.archived_files ADD CONSTRAINT archived_files_archive_configurations_fk FOREIGN KEY (archive_configuration_uuid1)
+REFERENCES aboa.archive_configurations (archive_configuration_uuid) MATCH FULL
+ON DELETE SET NULL ON UPDATE CASCADE;
+-- ddl-end --
+
+-- object: archived_files_delete_archive_configurations_fk | type: CONSTRAINT --
+-- ALTER TABLE aboa.archived_files DROP CONSTRAINT IF EXISTS archived_files_delete_archive_configurations_fk CASCADE;
+ALTER TABLE aboa.archived_files ADD CONSTRAINT archived_files_delete_archive_configurations_fk FOREIGN KEY (delete_archive_configuration_uuid1)
+REFERENCES aboa.archive_configurations (archive_configuration_uuid) MATCH FULL
+ON DELETE SET NULL ON UPDATE CASCADE;
 -- ddl-end --
 
 -- object: aboa.archive_operations | type: TABLE --
@@ -218,9 +252,45 @@ USING btree
 );
 -- ddl-end --
 
+-- object: idx_archived_files_removal_justification | type: INDEX --
+-- DROP INDEX IF EXISTS aboa.idx_archived_files_removal_justification CASCADE;
+CREATE INDEX idx_archived_files_removal_justification ON aboa.archived_files
+USING btree
+(
+	removal_justification
+);
+-- ddl-end --
+
+-- object: idx_archived_files_archive_configuration_uuid | type: INDEX --
+-- DROP INDEX IF EXISTS aboa.idx_archived_files_archive_configuration_uuid CASCADE;
+CREATE INDEX idx_archived_files_archive_configuration_uuid ON aboa.archived_files
+USING btree
+(
+	archive_configuration_uuid
+);
+-- ddl-end --
+
+-- object: idx_archived_files_delete_archive_configuration_uuid | type: INDEX --
+-- DROP INDEX IF EXISTS aboa.idx_archived_files_delete_archive_configuration_uuid CASCADE;
+CREATE INDEX idx_archived_files_delete_archive_configuration_uuid ON aboa.archived_files
+USING btree
+(
+	delete_archive_configuration_uuid
+);
+-- ddl-end --
+
 -- object: idx_archive_root_directories_active | type: INDEX --
 -- DROP INDEX IF EXISTS aboa.idx_archive_root_directories_active CASCADE;
 CREATE INDEX idx_archive_root_directories_active ON aboa.archive_root_directories
+USING btree
+(
+	active
+);
+-- ddl-end --
+
+-- object: idx_archive_configurations_active | type: INDEX --
+-- DROP INDEX IF EXISTS aboa.idx_archive_configurations_active CASCADE;
+CREATE INDEX idx_archive_configurations_active ON aboa.archive_configurations
 USING btree
 (
 	active

@@ -116,3 +116,17 @@ class TestConfiguration(unittest.TestCase):
         """
         with self.assertRaises(ArchiveConfigurationError):
             get_archive_configuration(input_configuration("example_missing_attribute.xml"))
+
+    def test_multiple_archive_rule_retention_policies_are_rejected(self):
+        """
+        Reject more than one retention policy inside a single archive rule.
+        """
+        with self.assertRaises(ArchiveConfigurationError):
+            get_archive_configuration(input_configuration("example_multiple_archive_rule_retention_policies.xml"))
+
+    def test_multiple_global_retention_policies_are_rejected(self):
+        """
+        Reject more than one retention policy inside the global policy section.
+        """
+        with self.assertRaises(ArchiveConfigurationError):
+            get_archive_configuration(input_configuration("example_multiple_global_retention_policies.xml"))

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<archive_configurations root_directory="/tmp/aboa_archive">
+  <archive_configuration file_group="bad_retention_count">
+    <file_mask>*.txt</file_mask>
+    <file_directory>texts</file_directory>
+    <retention_policy active="true" key="archive_date">P30D</retention_policy>
+    <retention_policy active="false" key="reception_date">P90D</retention_policy>
+  </archive_configuration>
+</archive_configurations>

@@ -69,11 +69,18 @@ class TestQuery(unittest.TestCase):
         files = query.get_archived_files(names={"filter": "%.txt", "op": "like"}, order_by={"field": "file_size", "descending": True}, limit=1)
         grouped = query.get_archived_files(group_by="file_group")
         last = query.get_archived_files(selection="last", order_by={"field": "file_size", "descending": False})
+        archive_configuration = query.get_active_archive_configuration()
+        configuration_files = query.get_archived_files(archive_configuration_uuids={"filter": [archive_configuration.archive_configuration_uuid], "op": "in"})
+        self.engine.delete_files(file_uuids=[configuration_files[0].file_uuid])
+        removed_files = query.get_archived_files(removal_justification={"filter": "manual_delete", "op": "like"})
 
         assert len(files) == 1
         assert files[0].name == "query_b.txt"
         assert "group_a" in grouped
         assert last[0].name == "query_b.txt"
+        assert len(configuration_files) == 2
+        assert len(removed_files) == 1
+        assert removed_files[0].removal_justification == "manual_delete"
 
     def test_query_archived_files_rejects_invalid_order_field(self):
         """
@@ -109,6 +116,35 @@ class TestQuery(unittest.TestCase):
         assert True in grouped
         assert False in grouped
         assert last[0].path == str(self.second_archive_root)
+
+    def test_query_archive_configurations_filters_selection_grouping_and_pagination(self):
+        """
+        Query archive-configuration history using the public query facade.
+        """
+        second_configuration_file = str(self.inputs_path / "query_archive_changed_root_configuration.xml")
+        self.engine._load_archive_configuration(self.configuration_file)
+        self.engine.set_configuration_path(second_configuration_file)
+        self.engine._load_archive_configuration(second_configuration_file)
+
+        query = Query(session=self.engine.session)
+        active_configurations = query.get_archive_configurations(
+            paths={"filter": second_configuration_file, "op": "like"},
+            active={"filter": True, "op": "=="},
+            limit=1,
+        )
+        inactive_configurations = query.get_archive_configurations(active={"filter": False, "op": "=="})
+        content_matches = query.get_archive_configurations(contents={"filter": "%aboa_test_query_archive_changed%", "op": "like"})
+        grouped = query.get_archive_configurations(group_by="active")
+        last = query.get_archive_configurations(selection="last", order_by={"field": "active", "descending": False})
+
+        assert len(active_configurations) == 1
+        assert active_configurations[0].path == second_configuration_file
+        assert len(inactive_configurations) == 1
+        assert inactive_configurations[0].path == self.configuration_file
+        assert len(content_matches) == 1
+        assert True in grouped
+        assert False in grouped
+        assert last[0].path == second_configuration_file
 
     def test_query_archive_operations_filters_selection_grouping_and_pagination(self):
         """

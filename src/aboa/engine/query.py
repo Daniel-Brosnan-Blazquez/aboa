@@ -9,6 +9,7 @@ import datetime
 from sqlalchemy.orm import scoped_session
 
 from aboa.datamodel.archived_files import (
+    ArchiveConfiguration,
     ArchivedFile,
     ArchiveOperation,
     ArchiveRootDirectory,
@@ -37,6 +38,9 @@ class Query():
         "file_type": ArchivedFile.file_type,
         "file_class": ArchivedFile.file_class,
         "file_version": ArchivedFile.file_version,
+        "archive_configuration_uuids": ArchivedFile.archive_configuration_uuid,
+        "delete_archive_configuration_uuids": ArchivedFile.delete_archive_configuration_uuid,
+        "removal_justification": ArchivedFile.removal_justification,
     }
     date_fields = {
         "reception_date_filters": ArchivedFile.reception_date,
@@ -66,6 +70,9 @@ class Query():
         "generation_date": ArchivedFile.generation_date,
         "expiration_date": ArchivedFile.expiration_date,
         "removal_date": ArchivedFile.removal_date,
+        "removal_justification": ArchivedFile.removal_justification,
+        "archive_configuration_uuid": ArchivedFile.archive_configuration_uuid,
+        "delete_archive_configuration_uuid": ArchivedFile.delete_archive_configuration_uuid,
     }
     archive_root_directory_text_fields = {
         "root_directory_uuids": ArchiveRootDirectory.root_directory_uuid,
@@ -81,6 +88,23 @@ class Query():
         "active_from": ArchiveRootDirectory.active_from,
         "active_until": ArchiveRootDirectory.active_until,
         "active": ArchiveRootDirectory.active,
+    }
+    archive_configuration_text_fields = {
+        "archive_configuration_uuids": ArchiveConfiguration.archive_configuration_uuid,
+        "paths": ArchiveConfiguration.path,
+        "contents": ArchiveConfiguration.content,
+    }
+    archive_configuration_date_fields = {
+        "active_from_date_filters": ArchiveConfiguration.active_from,
+        "active_until_date_filters": ArchiveConfiguration.active_until,
+    }
+    archive_configuration_order_fields = {
+        "archive_configuration_uuid": ArchiveConfiguration.archive_configuration_uuid,
+        "path": ArchiveConfiguration.path,
+        "active_from": ArchiveConfiguration.active_from,
+        "active_until": ArchiveConfiguration.active_until,
+        "active": ArchiveConfiguration.active,
+        "content": ArchiveConfiguration.content,
     }
     archive_operation_text_fields = {
         "operation_uuids": ArchiveOperation.operation_uuid,
@@ -141,14 +165,26 @@ class Query():
         """
         return self.session.query(ArchiveRootDirectory).filter(ArchiveRootDirectory.active == True).order_by(ArchiveRootDirectory.active_from.desc()).first()
 
+    def get_active_archive_configuration(self):
+        """
+        Return the most recently activated archive configuration.
+
+        :return: active archive configuration entity or None
+        :rtype: aboa.datamodel.archived_files.ArchiveConfiguration or None
+        """
+        return self.session.query(ArchiveConfiguration).filter(ArchiveConfiguration.active == True).order_by(ArchiveConfiguration.active_from.desc()).first()
+
     def get_archived_files(self, file_uuids=None, names=None, paths=None,
                            reception_date_filters=None, archive_date_filters=None,
                            file_size_filters=None, available=None,
                            last_access_date_filters=None, file_group=None,
                            file_type=None, file_class=None, file_version=None,
+                           archive_configuration_uuids=None,
+                           delete_archive_configuration_uuids=None,
                            validity_start_date_filters=None, validity_stop_date_filters=None,
                            generation_date_filters=None, expiration_date_filters=None,
-                           removal_date_filters=None, order_by=None, group_by=None,
+                           removal_date_filters=None, removal_justification=None,
+                           order_by=None, group_by=None,
                            selection="all", limit=None, offset=None):
         """
         Query archived files by metadata filters.
@@ -165,11 +201,14 @@ class Query():
         :param file_type: file type text filter
         :param file_class: file class text filter
         :param file_version: file version text filter
+        :param archive_configuration_uuids: archive-configuration UUID text filter
+        :param delete_archive_configuration_uuids: delete archive-configuration UUID text filter
         :param validity_start_date_filters: validity start date filters
         :param validity_stop_date_filters: validity stop date filters
         :param generation_date_filters: generation date filters
         :param expiration_date_filters: expiration date filters
         :param removal_date_filters: removal date filters
+        :param removal_justification: removal reason text filter
         :param order_by: ordering descriptor with field and descending keys
         :param group_by: field used to group complete entity results
         :param selection: selection rule: all, first, or last
@@ -269,6 +308,64 @@ class Query():
             query,
             self.archive_root_directory_order_fields,
             ArchiveRootDirectory.active_from.desc(),
+            group_by=group_by,
+            order_by=order_by,
+            selection=selection,
+            limit=limit,
+            offset=offset,
+        )
+
+    def get_archive_configurations(self, archive_configuration_uuids=None,
+                                   paths=None, contents=None,
+                                   active_from_date_filters=None,
+                                   active_until_date_filters=None, active=None,
+                                   order_by=None, group_by=None, selection="all",
+                                   limit=None, offset=None):
+        """
+        Query archive-configuration history rows.
+
+        :param archive_configuration_uuids: archive-configuration UUID text filter
+        :param paths: source XML path text filter
+        :param contents: raw XML content text filter
+        :param active_from_date_filters: activation date filters
+        :param active_until_date_filters: deactivation date filters
+        :param active: active boolean filter
+        :param order_by: ordering descriptor with field and descending keys
+        :param group_by: field used to group complete entity results
+        :param selection: selection rule: all, first, or last
+        :param limit: maximum number of rows
+        :param offset: result offset
+
+        :return: list of archive configurations, or grouped dictionary
+        :rtype: list or dict
+
+        :raises InputError: when filters, ordering, grouping, or selection are invalid
+        """
+        params = []
+        values = locals()
+
+        for argument_name, column in self.archive_configuration_text_fields.items():
+            value = values[argument_name]
+            if value is not None:
+                functions.is_valid_text_filter(value)
+                params.append(self._build_text_filter(column, value))
+
+        for argument_name, column in self.archive_configuration_date_fields.items():
+            value = values[argument_name]
+            if value is not None:
+                functions.is_valid_date_filters(value)
+                for date_filter in value:
+                    params.append(arithmetic_operators[date_filter["op"]](column, functions.parse_datetime(date_filter["date"])))
+
+        if active is not None:
+            functions.is_valid_bool_filter(active)
+            params.append(arithmetic_operators[active["op"]](ArchiveConfiguration.active, active["filter"]))
+
+        query = self.session.query(ArchiveConfiguration).filter(*params)
+        return self._finish_query(
+            query,
+            self.archive_configuration_order_fields,
+            ArchiveConfiguration.active_from.desc(),
             group_by=group_by,
             order_by=order_by,
             selection=selection,

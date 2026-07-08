@@ -9,7 +9,7 @@
               <xs:element name="file_mask" type="NonEmptyString"/>
               <xs:element name="file_directory" type="NonUnknownDirectory"/>
               <xs:element name="file_processor" type="xs:string" minOccurs="0"/>
-              <xs:element name="retention_policy" type="RetentionPolicyType" minOccurs="0" maxOccurs="unbounded"/>
+              <xs:element name="retention_policy" type="RetentionPolicyType" minOccurs="0" maxOccurs="1"/>
             </xs:sequence>
             <xs:attribute name="file_group" type="NonEmptyString" use="required"/>
           </xs:complexType>
@@ -17,7 +17,7 @@
         <xs:element name="retention_policies" minOccurs="0">
           <xs:complexType>
             <xs:sequence>
-              <xs:element name="retention_policy" type="RetentionPolicyType" minOccurs="0" maxOccurs="unbounded"/>
+              <xs:element name="retention_policy" type="RetentionPolicyType" minOccurs="0" maxOccurs="1"/>
             </xs:sequence>
           </xs:complexType>
         </xs:element>

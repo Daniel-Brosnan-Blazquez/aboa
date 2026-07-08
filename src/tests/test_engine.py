@@ -8,7 +8,7 @@ import sys
 import unittest
 from pathlib import Path
 
-from aboa.datamodel.archived_files import ArchivedFile, ArchiveOperation, ArchiveRootDirectory
+from aboa.datamodel.archived_files import ArchiveConfiguration, ArchivedFile, ArchiveOperation, ArchiveRootDirectory
 from aboa.engine.engine import Engine
 from aboa.engine.errors import ArchiveConfigurationError, ArchiveDeletionError, ArchiveFileError, ArchiveRetrievalError
 from aboa.engine.query import Query
@@ -83,6 +83,8 @@ class TestEngine(unittest.TestCase):
         archived_file = self.archive_and_get(input_file)
 
         assert archived_file.file_group == "group_a"
+        assert archived_file.archiveConfiguration is not None
+        assert archived_file.archiveConfiguration.path == self.configuration_file
         assert os.path.exists(archived_file.path)
         path_parts = archived_file.path.split(os.sep)
         assert "texts" in path_parts
@@ -122,6 +124,29 @@ class TestEngine(unittest.TestCase):
         assert os.path.exists(second_archive.path)
         assert os.path.commonpath([str(self.archive_root), first_archive.path]) == str(self.archive_root)
         assert os.path.commonpath([str(self.second_archive_root), second_archive.path]) == str(self.second_archive_root)
+
+    def test_load_archive_configuration_tracks_history_by_content_checksum(self):
+        """
+        Persist a new archive-configuration row only when XML content changes.
+        """
+        second_configuration = self.input_file("engine_archive_changed_root_configuration.xml")
+
+        self.engine._load_archive_configuration(self.configuration_file)
+        self.engine._load_archive_configuration(self.configuration_file)
+        first_rows = self.engine.session.query(ArchiveConfiguration).all()
+
+        self.engine._load_archive_configuration(str(second_configuration))
+        rows = self.engine.query.get_archive_configurations(order_by={"field": "active_from", "descending": False})
+        active_rows = self.engine.query.get_archive_configurations(active={"filter": True, "op": "=="})
+        inactive_rows = self.engine.query.get_archive_configurations(active={"filter": False, "op": "=="})
+
+        assert len(first_rows) == 1
+        assert len(rows) == 2
+        assert len(active_rows) == 1
+        assert len(inactive_rows) == 1
+        assert inactive_rows[0].active_until is not None
+        assert active_rows[0].path == str(second_configuration)
+        assert active_rows[0].content == second_configuration.read_text(encoding="utf-8")
 
     def test_archive_file_reloads_configuration_and_repairs_stale_root_directory(self):
         """
@@ -168,6 +193,7 @@ class TestEngine(unittest.TestCase):
             assert archived_files[0].path == str(self.input_file("sample.txt"))
             assert archived_files[0].available is False
             assert archived_files[0].rootDirectory.path == str(default_archive_root)
+            assert archived_files[0].archive_configuration_uuid is None
             assert len(operations) == 1
             assert operations[0].file_uuid == archived_files[0].file_uuid
         finally:
@@ -293,6 +319,8 @@ class TestEngine(unittest.TestCase):
 
         assert deleted[0].available is False
         assert deleted[0].removal_date is not None
+        assert deleted[0].removal_justification == "manual_delete"
+        assert deleted[0].delete_archive_configuration_uuid is None
         assert not os.path.exists(deleted[0].path)
 
     def test_delete_files_raises_archive_deletion_error_on_failure(self):

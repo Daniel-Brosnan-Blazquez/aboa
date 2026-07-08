@@ -14,6 +14,7 @@ import uuid
 from sqlalchemy.orm import scoped_session
 
 from aboa.datamodel.archived_files import (
+    ArchiveConfiguration,
     ArchivedFile,
     ArchiveOperation,
     ArchiveRootDirectory,
@@ -90,8 +91,9 @@ class Engine():
     Class for managing ABOA archive mutations.
 
     The engine owns the write-side operations for the archive inventory. It stores
-    metadata of archived files, status of failed archive operations and root-directory history in the database.
-    Archive matching rules and retention policy keys remain runtime configuration loaded from XML.
+    metadata of archived files, status of failed archive operations, root-directory history,
+    and archive-configuration history in the database. Archive matching rules and
+    retention policy keys remain runtime configuration loaded from XML.
     """
 
     def __init__(self, session=None):
@@ -155,6 +157,7 @@ class Engine():
         archive_date = datetime.datetime.utcnow()
         failures = []
         root_directory = None
+        archive_configuration = None
 
         # Load the archive configuration XML and synchronize the root-directory.
         try:
@@ -163,18 +166,19 @@ class Engine():
             message = exit_codes["CONFIGURATION_FAILED"]["message"].format(self.configuration_path, exc)
             logger.error(message)
             failures.append((exit_codes["CONFIGURATION_FAILED"]["status"], message))
-            self._record_archive_failures(file_path, file_path, reception_date, archive_date, metadata, None, failures, root_directory)
+            self._record_archive_failures(file_path, file_path, reception_date, archive_date, metadata, None, failures, root_directory, archive_configuration)
             raise ArchiveConfigurationError(message)
 
         # Get the active root directory for the archive.
         root_directory = self.query.get_active_root_directory()
+        archive_configuration = self.query.get_active_archive_configuration()
 
         # Check that the file exists
         if not os.path.exists(file_path):
             message = exit_codes["FILE_DOES_NOT_EXIST"]["message"].format(file_path)
             logger.error(message)
             failures.append((exit_codes["FILE_DOES_NOT_EXIST"]["status"], message))
-            self._record_archive_failures(file_path, file_path, reception_date, archive_date, metadata, None, failures, root_directory)
+            self._record_archive_failures(file_path, file_path, reception_date, archive_date, metadata, None, failures, root_directory, archive_configuration)
             raise ArchiveFileError(message)
 
         # Find the matching archiving configuration
@@ -237,11 +241,11 @@ class Engine():
                 message = exit_codes["FILE_STORAGE_FAILED"]["message"].format(file_path, second_exc)
                 logger.error(message)
                 failures.append((exit_codes["FILE_STORAGE_FAILED"]["status"], message))
-                self._record_archive_failures(file_path, destination_path, reception_date, archive_date, metadata, checksum, failures, root_directory)
+                self._record_archive_failures(file_path, destination_path, reception_date, archive_date, metadata, checksum, failures, root_directory, archive_configuration)
                 raise ArchiveFileError(message)
 
         # Store metadata in the database and record any failures.
-        archived_file = self._build_archived_file(file_path, destination_path, reception_date, archive_date, metadata, checksum, root_directory)
+        archived_file = self._build_archived_file(file_path, destination_path, reception_date, archive_date, metadata, checksum, root_directory, archive_configuration)
         self.session.add(archived_file)
         for status, message in failures:
             self._record_failure("archive", status, message, archived_file)
@@ -305,7 +309,7 @@ class Engine():
             self.session.commit()
             raise ArchiveRetrievalError(message) from exc
 
-    def delete_files(self, filters=None, file_uuids=None, physical_delete=False):
+    def delete_files(self, filters=None, file_uuids=None, physical_delete=False, removal_justification="manual_delete"):
         """
         Delete archived files logically and optionally remove physical payloads.
 
@@ -315,6 +319,8 @@ class Engine():
         :type file_uuids: list or None
         :param physical_delete: remove files from the POSIX archive when true
         :type physical_delete: bool
+        :param removal_justification: reason stored on logically removed files
+        :type removal_justification: str or None
 
         :return: deleted archive inventory entities
         :rtype: list
@@ -330,6 +336,8 @@ class Engine():
                 # explicit caller choice and still leaves the inventory row for trace.
                 archived_file.available = False
                 archived_file.removal_date = now
+                archived_file.removal_justification = removal_justification
+                archived_file.deleteArchiveConfiguration = None
                 if physical_delete and os.path.exists(archived_file.path):
                     os.unlink(archived_file.path)
             self.session.commit()
@@ -359,6 +367,7 @@ class Engine():
         # Engine exposes this convenience wrapper.
         from aboa.engine.retention import apply_retention
         try:
+            self._load_archive_configuration(self.configuration_path)
             return apply_retention(self, policy_names=policy_names, dry_run=dry_run)
         except Exception as exc:
             self.session.rollback()
@@ -438,6 +447,7 @@ class Engine():
             configuration_xpath = get_archive_configuration(configuration_path)
             root_directory_path = configuration_xpath("string(/archive_configurations/@root_directory)").strip()
             self._activate_root_directory(root_directory_path)
+            self._activate_archive_configuration(configuration_path)
             self.configuration_xpath = configuration_xpath
             self.configuration_path = configuration_path
         except Exception as exc:
@@ -457,6 +467,42 @@ class Engine():
             raise ArchiveConfigurationError(exc)
 
         return
+
+    def _activate_archive_configuration(self, configuration_path):
+        """
+        Ensure the supplied XML configuration path is the active configuration.
+
+        A new history row is created only when the active configuration checksum
+        differs from the checksum of the XML content at the supplied path.
+
+        :param configuration_path: source XML archive configuration path
+        :type configuration_path: str
+        """
+        with open(configuration_path, "r", encoding="utf-8") as configuration_file:
+            configuration_content = configuration_file.read()
+        active_configuration = self.query.get_active_archive_configuration()
+        configuration_checksum = self._configuration_checksum(configuration_content)
+        if active_configuration is None or self._configuration_checksum(active_configuration.content) != configuration_checksum:
+            now = datetime.datetime.utcnow()
+            for configuration in self.session.query(ArchiveConfiguration).filter(ArchiveConfiguration.active == True).all():
+                configuration.active = False
+                configuration.active_until = now
+
+            archive_configuration = ArchiveConfiguration(uuid.uuid4(), configuration_path, now, configuration_content)
+            self.session.add(archive_configuration)
+            self.session.commit()
+
+    def _configuration_checksum(self, configuration_content):
+        """
+        Calculate a SHA-256 checksum for archive configuration text.
+
+        :param configuration_content: raw XML archive configuration content
+        :type configuration_content: str
+
+        :return: hexadecimal SHA-256 checksum
+        :rtype: str
+        """
+        return hashlib.sha256(configuration_content.encode("utf-8")).hexdigest()
 
     def _activate_root_directory(self, root_directory_path):
         """
@@ -483,7 +529,7 @@ class Engine():
             self.session.add(root_directory)
             self.session.commit()
 
-    def _build_archived_file(self, file_path, archive_path, reception_date, archive_date, metadata, checksum, root_directory, available=True):
+    def _build_archived_file(self, file_path, archive_path, reception_date, archive_date, metadata, checksum, root_directory, archive_configuration=None, available=True):
         """
         Build an archived-file row with the common metadata mapping.
 
@@ -501,6 +547,8 @@ class Engine():
         :type checksum: str or None
         :param root_directory: associated root-directory history entity
         :type root_directory: aboa.datamodel.archived_files.ArchiveRootDirectory
+        :param archive_configuration: associated archive-configuration history entity
+        :type archive_configuration: aboa.datamodel.archived_files.ArchiveConfiguration or None
         :param available: logical availability flag
         :type available: bool
 
@@ -516,6 +564,7 @@ class Engine():
             archive_date,
             file_size,
             root_directory,
+            archive_configuration=archive_configuration,
             available=available,
             file_group=metadata.get("file_group"),
             file_type=metadata.get("file_type"),
@@ -528,7 +577,7 @@ class Engine():
             checksum=checksum,
         )
 
-    def _record_archive_failures(self, file_path, archive_path, reception_date, archive_date, metadata, checksum, failures, root_directory):
+    def _record_archive_failures(self, file_path, archive_path, reception_date, archive_date, metadata, checksum, failures, root_directory, archive_configuration=None):
         """
         Persist archive failure rows after creating their archived-file context.
 
@@ -548,13 +597,15 @@ class Engine():
         :type failures: list
         :param root_directory: associated root-directory history entity, if known
         :type root_directory: aboa.datamodel.archived_files.ArchiveRootDirectory or None
+        :param archive_configuration: associated archive configuration entity, if known
+        :type archive_configuration: aboa.datamodel.archived_files.ArchiveConfiguration or None
         """
         if root_directory is None:
             root_directory = self.query.get_active_root_directory()
 
         archived_file = None
         if root_directory is not None:
-            archived_file = self._build_archived_file(file_path, archive_path, reception_date, archive_date, metadata, checksum, root_directory, available=False)
+            archived_file = self._build_archived_file(file_path, archive_path, reception_date, archive_date, metadata, checksum, root_directory, archive_configuration, available=False)
             self.session.add(archived_file)
 
         for status, message in failures:

@@ -29,13 +29,10 @@ class ArchiveRootDirectory(Base):
     """
     Persisted history entry for an archive root directory.
 
-    Only root-directory history is stored in the database. File matching and
-    retention policy definitions are runtime XML configuration.
+    Root directories are stored as a timeline so archived files keep the exact
+    root that was active when they were managed.
     """
 
-    # The only configuration history persisted in the inventory is the root
-    # directory timeline. File masks and retention policy definitions remain XML
-    # runtime configuration.
     __tablename__ = "archive_root_directories"
 
     root_directory_uuid = Column(Text, primary_key=True)
@@ -76,6 +73,68 @@ class ArchiveRootDirectory(Base):
         }
 
 
+class ArchiveConfiguration(Base):
+    """
+    Persisted history entry for an archive XML configuration.
+
+    The full XML content is stored so configuration changes can be detected by
+    checksum without adding another persisted column.
+    """
+
+    __tablename__ = "archive_configurations"
+
+    archive_configuration_uuid = Column(Text, primary_key=True)
+    path = Column(Text, nullable=False)
+    active_from = Column(DateTime, nullable=False)
+    active_until = Column(DateTime)
+    active = Column(Boolean, nullable=False, default=True)
+    content = Column(Text, nullable=False)
+    archivedFiles = relationship(
+        "ArchivedFile",
+        foreign_keys="ArchivedFile.archive_configuration_uuid",
+        back_populates="archiveConfiguration",
+    )
+    deletedArchivedFiles = relationship(
+        "ArchivedFile",
+        foreign_keys="ArchivedFile.delete_archive_configuration_uuid",
+        back_populates="deleteArchiveConfiguration",
+    )
+
+    def __init__(self, archive_configuration_uuid, path, active_from, content, active_until=None, active=True):
+        """
+        Build an archive-configuration history entity.
+
+        :param archive_configuration_uuid: archive configuration UUID
+        :param path: source XML configuration path
+        :param active_from: activation timestamp
+        :param content: raw XML configuration content
+        :param active_until: deactivation timestamp, if any
+        :param active: flag indicating whether this configuration is active
+        """
+        self.archive_configuration_uuid = str(archive_configuration_uuid)
+        self.path = path
+        self.active_from = active_from
+        self.active_until = active_until
+        self.active = active
+        self.content = content
+
+    def jsonify(self):
+        """
+        Serialize the archive-configuration history entry.
+
+        :return: JSON-ready dictionary
+        :rtype: dict
+        """
+        return {
+            "archive_configuration_uuid": str(self.archive_configuration_uuid),
+            "path": self.path,
+            "active_from": _isoformat(self.active_from),
+            "active_until": _isoformat(self.active_until),
+            "active": self.active,
+            "content": self.content,
+        }
+
+
 class ArchivedFile(Base):
     """
     Inventory row for a file managed by ABOA.
@@ -96,6 +155,18 @@ class ArchivedFile(Base):
     available = Column(Boolean, index=True, nullable=False, default=True)
     root_directory_uuid = Column(Text, ForeignKey("archive_root_directories.root_directory_uuid"), nullable=False)
     rootDirectory = relationship("ArchiveRootDirectory", backref="archived_files")
+    archive_configuration_uuid = Column(Text, ForeignKey("archive_configurations.archive_configuration_uuid"), nullable=True)
+    archiveConfiguration = relationship(
+        "ArchiveConfiguration",
+        foreign_keys=[archive_configuration_uuid],
+        back_populates="archivedFiles",
+    )
+    delete_archive_configuration_uuid = Column(Text, ForeignKey("archive_configurations.archive_configuration_uuid"), nullable=True)
+    deleteArchiveConfiguration = relationship(
+        "ArchiveConfiguration",
+        foreign_keys=[delete_archive_configuration_uuid],
+        back_populates="deletedArchivedFiles",
+    )
     last_access_date = Column(DateTime, index=True)
     file_group = Column(Text, index=True)
     file_type = Column(Text, index=True)
@@ -106,13 +177,15 @@ class ArchivedFile(Base):
     generation_date = Column(DateTime, index=True)
     expiration_date = Column(DateTime, index=True)
     removal_date = Column(DateTime, index=True)
+    removal_justification = Column(Text, index=True)
     checksum = Column(Text)
 
     def __init__(self, file_uuid, name, path, reception_date, archive_date, file_size, root_directory,
+                 archive_configuration=None, delete_archive_configuration=None,
                  available=True, last_access_date=None, file_group=None, file_type=None,
                  file_class=None, file_version=None, validity_start_date=None,
                  validity_stop_date=None, generation_date=None, expiration_date=None,
-                 removal_date=None, checksum=None):
+                 removal_date=None, removal_justification=None, checksum=None):
         """
         Build an archived-file inventory entity.
 
@@ -123,6 +196,8 @@ class ArchivedFile(Base):
         :param archive_date: archive timestamp
         :param file_size: archived file size in bytes
         :param root_directory: associated root-directory history entity
+        :param archive_configuration: associated archive configuration used to archive
+        :param delete_archive_configuration: associated archive configuration used to delete
         :param available: logical availability flag
         :param last_access_date: last retrieval timestamp
         :param file_group: optional configured file group
@@ -134,6 +209,7 @@ class ArchivedFile(Base):
         :param generation_date: optional generation timestamp
         :param expiration_date: optional expiration timestamp
         :param removal_date: optional logical removal timestamp
+        :param removal_justification: optional logical removal reason
         :param checksum: optional SHA-256 checksum
         """
         self.file_uuid = str(file_uuid)
@@ -144,6 +220,8 @@ class ArchivedFile(Base):
         self.file_size = file_size
         self.available = available
         self.rootDirectory = root_directory
+        self.archiveConfiguration = archive_configuration
+        self.deleteArchiveConfiguration = delete_archive_configuration
         self.last_access_date = last_access_date
         self.file_group = file_group
         self.file_type = file_type
@@ -154,6 +232,7 @@ class ArchivedFile(Base):
         self.generation_date = generation_date
         self.expiration_date = expiration_date
         self.removal_date = removal_date
+        self.removal_justification = removal_justification
         self.checksum = checksum
 
     def jsonify(self):
@@ -172,6 +251,8 @@ class ArchivedFile(Base):
             "file_size": self.file_size,
             "available": self.available,
             "root_directory_uuid": str(self.root_directory_uuid),
+            "archive_configuration_uuid": str(self.archive_configuration_uuid) if self.archive_configuration_uuid else None,
+            "delete_archive_configuration_uuid": str(self.delete_archive_configuration_uuid) if self.delete_archive_configuration_uuid else None,
             "last_access_date": _isoformat(self.last_access_date),
             "file_group": self.file_group,
             "file_type": self.file_type,
@@ -182,6 +263,7 @@ class ArchivedFile(Base):
             "generation_date": _isoformat(self.generation_date),
             "expiration_date": _isoformat(self.expiration_date),
             "removal_date": _isoformat(self.removal_date),
+            "removal_justification": self.removal_justification,
             "checksum": self.checksum,
         }
 
