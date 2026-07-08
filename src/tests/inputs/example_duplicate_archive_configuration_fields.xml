@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<archive_configurations root_directory="/tmp/aboa_archive">
+  <archive_configuration file_group="group_a">
+    <file_mask>*.txt</file_mask>
+    <file_directory>texts</file_directory>
+  </archive_configuration>
+  <archive_configuration file_group="group_a">
+    <file_mask>*.txt</file_mask>
+    <file_directory>incoming_texts</file_directory>
+  </archive_configuration>
+  <archive_configuration file_group="group_b">
+    <file_mask>*.csv</file_mask>
+    <file_directory>texts</file_directory>
+  </archive_configuration>
+</archive_configurations>

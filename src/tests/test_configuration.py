@@ -69,6 +69,19 @@ class TestConfiguration(unittest.TestCase):
             "metadata_processor",
         )
 
+    def test_duplicate_archive_configuration_fields_are_warned(self):
+        """
+        Warn about duplicated archive-rule routing values without rejecting XML.
+        """
+        with self.assertLogs("aboa.engine.parsing", level="WARNING") as log_records:
+            configuration = get_archive_configuration(input_configuration("example_duplicate_archive_configuration_fields.xml"))
+
+        warnings = "\n".join(log_records.output)
+        self.assertEqual(configuration("count(/archive_configurations/archive_configuration)"), 3.0)
+        self.assertIn("same file_group 'group_a'", warnings)
+        self.assertIn("same file_mask '*.txt'", warnings)
+        self.assertIn("same file_directory 'texts'", warnings)
+
     def test_retention_policies_can_be_selected(self):
         """
         Read retention policies from global and archive-rule XML locations.
