@@ -23,6 +23,9 @@ def _validate_with_lxml(configuration_xml):
     :param configuration_xml: parsed XML configuration file
     :type configuration_xml: lxml.etree.Element
 
+    :return: None
+    :rtype: None
+
     :raises ArchiveConfigurationError: when the file does not pass schema validation
     """
 
@@ -46,6 +49,9 @@ def _warn_duplicated_archive_configuration_fields(configuration_xml):
 
     :param configuration_xml: parsed XML configuration file
     :type configuration_xml: lxml.etree.ElementTree
+
+    :return: None
+    :rtype: None
     """
     field_extractors = {
         "file_group": lambda node: node.get("file_group"),

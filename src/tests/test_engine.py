@@ -2,6 +2,7 @@
 Tests for archive engine configuration, storage, and failure handling.
 """
 
+import datetime
 import os
 import shutil
 import sys
@@ -94,6 +95,7 @@ class TestEngine(unittest.TestCase):
             archived_file.archive_date.strftime("%d"),
         ]
         assert archived_file.file_size == os.path.getsize(input_file)
+        assert archived_file.expiration_date == archived_file.archive_date + datetime.timedelta(days=1)
 
     def test_archive_unmatched_file_goes_to_unknown(self):
         """

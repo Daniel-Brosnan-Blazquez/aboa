@@ -8,9 +8,11 @@ import datetime
 import hashlib
 import importlib
 import os
+import re
 import shutil
 import uuid
 
+from dateutil.relativedelta import relativedelta
 from sqlalchemy.orm import scoped_session
 
 from aboa.datamodel.archived_files import (
@@ -29,6 +31,14 @@ from aboa.logging import Log
 
 logging = Log(name=__name__)
 logger = logging.logger
+
+XML_DURATION_PATTERN = re.compile(
+    r"^(?P<sign>-)?P"
+    r"(?:(?P<years>\d+)Y)?"
+    r"(?:(?P<months>\d+)M)?"
+    r"(?:(?P<days>\d+)D)?"
+    r"(?:T(?:(?P<hours>\d+)H)?(?:(?P<minutes>\d+)M)?(?:(?P<seconds>\d+(?:\.\d+)?)S)?)?$"
+)
 
 # Register custom XPath functions for ABOA archive configuration XML.
 register_xpath_functions()
@@ -102,6 +112,9 @@ class Engine():
 
         :param session: optional SQLAlchemy session supplied by tests or callers
         :type session: sqlalchemy.orm.session.Session or None
+
+        :return: None
+        :rtype: None
         """
         if session is None:
             Scoped_session = scoped_session(Session)
@@ -119,12 +132,18 @@ class Engine():
         :param configuration_path: archive configuration XML path, or None to use
             the default ``ABOA_RESOURCES_PATH`` configuration
         :type configuration_path: str or None
+
+        :return: None
+        :rtype: None
         """
         self.configuration_path = configuration_path
 
     def close_session(self):
         """
         Close the underlying SQLAlchemy session.
+
+        :return: None
+        :rtype: None
         """
         self.session.close()
 
@@ -203,6 +222,11 @@ class Engine():
             failures.append((exit_codes["PROCESSOR_FAILED"]["status"], error_message))
             target_directory = "error"
             logger.error(error_message)
+
+        if metadata.get("expiration_date") is None:
+            expiration_date = self._calculate_expiration_date(configuration, reception_date, archive_date, metadata)
+            if expiration_date is not None:
+                metadata["expiration_date"] = expiration_date
 
         # Calculate the checksum of the file to be archived.
         # Checksum failure is registered as an archive error.
@@ -286,6 +310,9 @@ class Engine():
 
         :return: list of archived files, or grouped dictionary when ``group_by`` is set
         :rtype: list or dict
+
+        :raises ArchiveRetrievalError: when inventory retrieval or last-access
+            update fails
         """
         try:
             filters = filters or {}
@@ -324,6 +351,9 @@ class Engine():
 
         :return: deleted archive inventory entities
         :rtype: list
+
+        :raises ArchiveDeletionError: when lookup, inventory update, or physical
+            deletion fails
         """
         try:
             filters = dict(filters or {})
@@ -362,6 +392,9 @@ class Engine():
 
         :return: retention candidate or affected archived files
         :rtype: list
+
+        :raises ArchiveConfigurationError: when retention configuration cannot load
+        :raises Exception: when retention evaluation or cleanup fails
         """
         # Imported lazily to avoid a module cycle: retention works on Engine and
         # Engine exposes this convenience wrapper.
@@ -421,11 +454,121 @@ class Engine():
     def _configuration_node_text(self, configuration_node, child_name, empty_as_none=False):
         """
         Return stripped child text from an archive configuration XML node.
+
+        :param configuration_node: XML archive configuration node
+        :type configuration_node: lxml.etree._Element
+        :param child_name: child element name to read
+        :type child_name: str
+        :param empty_as_none: return None instead of an empty string
+        :type empty_as_none: bool
+
+        :return: stripped child text, or None when requested for empty values
+        :rtype: str or None
         """
         text = configuration_node.xpath("string({})".format(child_name)).strip()
         if empty_as_none and text == "":
             return None
         return text
+
+    def _calculate_expiration_date(self, configuration_node, reception_date, archive_date, metadata):
+        """
+        Calculate expiration from the applicable XML retention policy.
+
+        Rule-specific policies take precedence over global policies. Explicit
+        metadata expiration is handled by the caller and is not overridden here.
+
+        :param configuration_node: matching XML archive rule, if any
+        :type configuration_node: lxml.etree._Element or None
+        :param reception_date: file reception timestamp
+        :type reception_date: datetime.datetime
+        :param archive_date: archive operation timestamp
+        :type archive_date: datetime.datetime
+        :param metadata: archive metadata used by date-keyed policies
+        :type metadata: dict
+
+        :return: calculated expiration timestamp, or None when no policy applies
+        :rtype: datetime.datetime or None
+
+        :raises ArchiveConfigurationError: when the selected retention duration is
+            not a valid XML Schema duration
+        """
+        retention_policy = self._retention_policy_for_configuration(configuration_node)
+        if retention_policy is None:
+            return None
+
+        retention_key = retention_policy.get("key")
+        if retention_key == "archive_date":
+            base_date = archive_date
+        elif retention_key == "generation_date":
+            base_date = parse_datetime(metadata.get("generation_date"))
+        elif retention_key == "reception_date":
+            base_date = reception_date
+        elif retention_key == "validity_stop_date":
+            base_date = parse_datetime(metadata.get("validity_stop_date"))
+        else:
+            return None
+
+        if base_date is None:
+            return None
+        return base_date + self._parse_retention_duration(retention_policy.text)
+
+    def _retention_policy_for_configuration(self, configuration_node):
+        """
+        Return the active retention policy for a matched rule or global fallback.
+
+        :param configuration_node: matching XML archive rule, if any
+        :type configuration_node: lxml.etree._Element or None
+
+        :return: active retention policy XML node, or None when none is configured
+        :rtype: lxml.etree._Element or None
+        """
+        if configuration_node is not None:
+            policies = configuration_node.xpath("retention_policy[@active='true' or @active='1']")
+            if len(policies) > 0:
+                return policies[0]
+
+        if self.configuration_xpath is None:
+            return None
+
+        policies = self.configuration_xpath(
+            "/archive_configurations/retention_policies/retention_policy[@active='true' or @active='1']"
+        )
+        if len(policies) > 0:
+            return policies[0]
+        return None
+
+    def _parse_retention_duration(self, duration):
+        """
+        Parse an XML Schema duration into a calendar-aware relativedelta.
+
+        :param duration: XML Schema duration text, such as ``P1D`` or ``P1Y``
+        :type duration: str
+
+        :return: calendar-aware relative delta represented by the duration
+        :rtype: dateutil.relativedelta.relativedelta
+
+        :raises ArchiveConfigurationError: when the duration is empty or invalid
+        """
+        duration = (duration or "").strip()
+        match = XML_DURATION_PATTERN.match(duration)
+        if match is None:
+            raise ArchiveConfigurationError("The retention policy duration {} is not valid".format(duration))
+
+        parts = match.groupdict()
+        duration_fields = ["years", "months", "days", "hours", "minutes", "seconds"]
+        if all(parts[field] is None for field in duration_fields):
+            raise ArchiveConfigurationError("The retention policy duration {} is not valid".format(duration))
+
+        sign = -1 if parts["sign"] == "-" else 1
+        seconds = sign * float(parts["seconds"]) if parts["seconds"] is not None else 0
+        return relativedelta(
+            years=sign * int(parts["years"] or 0),
+            months=sign * int(parts["months"] or 0),
+            days=sign * int(parts["days"] or 0),
+            hours=sign * int(parts["hours"] or 0),
+            minutes=sign * int(parts["minutes"] or 0),
+            seconds=seconds,
+        )
 
     def _load_archive_configuration(self, configuration_path=None):
         """
@@ -439,6 +582,9 @@ class Engine():
 
         :raises ArchiveConfigurationError: when neither configuration nor default
             root directory can load
+
+        :return: None
+        :rtype: None
         """
 
         try:
@@ -477,6 +623,9 @@ class Engine():
 
         :param configuration_path: source XML archive configuration path
         :type configuration_path: str
+
+        :return: None
+        :rtype: None
         """
         with open(configuration_path, "r", encoding="utf-8") as configuration_file:
             configuration_content = configuration_file.read()
@@ -510,6 +659,11 @@ class Engine():
 
         :param root_directory_path: POSIX archive root directory path
         :type root_directory_path: str
+
+        :return: None
+        :rtype: None
+
+        :raises ArchiveConfigurationError: when the root directory path is empty
         """
         if root_directory_path is None or root_directory_path.strip() == "":
             raise ArchiveConfigurationError("The archive root directory is not configured")
@@ -599,6 +753,9 @@ class Engine():
         :type root_directory: aboa.datamodel.archived_files.ArchiveRootDirectory or None
         :param archive_configuration: associated archive configuration entity, if known
         :type archive_configuration: aboa.datamodel.archived_files.ArchiveConfiguration or None
+
+        :return: None
+        :rtype: None
         """
         if root_directory is None:
             root_directory = self.query.get_active_root_directory()
@@ -676,6 +833,11 @@ class Engine():
         :type source_path: str
         :param destination_path: archive destination path
         :type destination_path: str
+
+        :return: None
+        :rtype: None
+
+        :raises OSError: when neither hard-linking nor copying can store the file
         """
         # Hard links are preferred because they are cheap on POSIX filesystems. The
         # copy fallback handles cross-device archives and filesystems without links.
@@ -713,6 +875,9 @@ class Engine():
         :type message: str
         :param archived_file: optional archived file related to the failure
         :type archived_file: aboa.datamodel.archived_files.ArchivedFile or None
+
+        :return: None
+        :rtype: None
         """
         operation_row = ArchiveOperation(uuid.uuid4(), operation, datetime.datetime.utcnow(), status, message=message, archived_file=archived_file)
         self.session.add(operation_row)
