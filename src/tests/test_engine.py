@@ -75,6 +75,16 @@ class TestEngine(unittest.TestCase):
 
         assert self.engine.configuration_path == configuration_path
 
+    def test_get_exit_code_returns_copy(self):
+        """
+        Expose engine exit-code descriptors without sharing mutable state.
+        """
+        exit_code = self.engine.get_exit_code("RETENTION_FAILED")
+        exit_code["status"] = -1
+
+        assert self.engine.get_exit_code("RETENTION_FAILED")["status"] == 10
+        assert "retention operation" in self.engine.get_exit_code("RETENTION_FAILED")["message"]
+
     def test_archive_matching_file(self):
         """
         Archive a file that matches the configured text rule.
@@ -96,6 +106,8 @@ class TestEngine(unittest.TestCase):
         ]
         assert archived_file.file_size == os.path.getsize(input_file)
         assert archived_file.expiration_date == archived_file.archive_date + datetime.timedelta(days=1)
+        assert archived_file.deleteArchiveConfiguration is not None
+        assert archived_file.deleteArchiveConfiguration.path == self.configuration_file
 
     def test_archive_unmatched_file_goes_to_unknown(self):
         """

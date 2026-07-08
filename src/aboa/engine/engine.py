@@ -103,7 +103,8 @@ class Engine():
     The engine owns the write-side operations for the archive inventory. It stores
     metadata of archived files, status of failed archive operations, root-directory history,
     and archive-configuration history in the database. Archive matching rules and
-    retention policy keys remain runtime configuration loaded from XML.
+    retention policy definitions remain runtime configuration loaded from XML and
+    are applied while archiving files.
     """
 
     def __init__(self, session=None):
@@ -124,6 +125,29 @@ class Engine():
         self.query = Query(session=self.session)
         self.configuration_xpath = None
         self.configuration_path = None
+
+    def get_exit_codes(self):
+        """
+        Return engine exit-code descriptors.
+
+        :return: copy of the exit-code table keyed by code name
+        :rtype: dict
+        """
+        return {key: dict(value) for key, value in exit_codes.items()}
+
+    def get_exit_code(self, name):
+        """
+        Return one engine exit-code descriptor by name.
+
+        :param name: exit-code key, such as ``RETENTION_FAILED``
+        :type name: str
+
+        :return: copy of the exit-code descriptor
+        :rtype: dict
+
+        :raises KeyError: when the exit-code key is unknown
+        """
+        return self.get_exit_codes()[name]
 
     def set_configuration_path(self, configuration_path):
         """
@@ -272,7 +296,7 @@ class Engine():
         archived_file = self._build_archived_file(file_path, destination_path, reception_date, archive_date, metadata, checksum, root_directory, archive_configuration)
         self.session.add(archived_file)
         for status, message in failures:
-            self._record_failure("archive", status, message, archived_file)
+            self.record_failure("archive", status, message, archived_file)
         self.session.commit()
 
         # Check deletion
@@ -284,7 +308,7 @@ class Engine():
             except Exception as exc:
                 message = exit_codes["INPUT_DELETE_FAILED"]["message"].format(file_path, exc)
                 logger.error(message)
-                self._record_failure("archive", exit_codes["INPUT_DELETE_FAILED"]["status"], message, archived_file)
+                self.record_failure("archive", exit_codes["INPUT_DELETE_FAILED"]["status"], message, archived_file)
                 self.session.commit()
                 raise ArchiveFileError(message)
 
@@ -332,7 +356,7 @@ class Engine():
             self.session.rollback()
             message = exit_codes["RETRIEVE_FAILED"]["message"].format(exc)
             logger.error(message)
-            self._record_failure("retrieve", exit_codes["RETRIEVE_FAILED"]["status"], message)
+            self.record_failure("retrieve", exit_codes["RETRIEVE_FAILED"]["status"], message)
             self.session.commit()
             raise ArchiveRetrievalError(message) from exc
 
@@ -377,38 +401,9 @@ class Engine():
             self.session.rollback()
             message = exit_codes["DELETE_FAILED"]["message"].format(exc)
             logger.error(message)
-            self._record_failure("delete", exit_codes["DELETE_FAILED"]["status"], message)
+            self.record_failure("delete", exit_codes["DELETE_FAILED"]["status"], message)
             self.session.commit()
             raise ArchiveDeletionError(message) from exc
-
-    def apply_retention(self, policy_names=None, dry_run=False):
-        """
-        Apply runtime XML retention policies to archived files.
-
-        :param policy_names: optional policy keys to execute
-        :type policy_names: list or None
-        :param dry_run: return candidates without changing inventory or filesystem
-        :type dry_run: bool
-
-        :return: retention candidate or affected archived files
-        :rtype: list
-
-        :raises ArchiveConfigurationError: when retention configuration cannot load
-        :raises Exception: when retention evaluation or cleanup fails
-        """
-        # Imported lazily to avoid a module cycle: retention works on Engine and
-        # Engine exposes this convenience wrapper.
-        from aboa.engine.retention import apply_retention
-        try:
-            self._load_archive_configuration(self.configuration_path)
-            return apply_retention(self, policy_names=policy_names, dry_run=dry_run)
-        except Exception as exc:
-            self.session.rollback()
-            message = exit_codes["RETENTION_FAILED"]["message"].format(exc)
-            logger.error(message)
-            self._record_failure("retention", exit_codes["RETENTION_FAILED"]["status"], message)
-            self.session.commit()
-            raise
 
     def _match_configuration(self, file_path):
         """
@@ -430,26 +425,6 @@ class Engine():
         if len(matching_configurations) == 0:
             return None
         return matching_configurations[0]
-
-    def get_active_retention_policies(self, policy_names=None):
-        """
-        Select active retention policies directly from the archive configuration XML.
-
-        :param policy_names: optional list of policy keys to select
-        :type policy_names: list or None
-
-        :return: active retention policy XML nodes
-        :rtype: list
-        """
-        if self.configuration_xpath is None:
-            return []
-        policies = self.configuration_xpath(
-            "/archive_configurations/retention_policies/retention_policy[@active='true' or @active='1'] | "
-            "/archive_configurations/archive_configuration/retention_policy[@active='true' or @active='1']"
-        )
-        if policy_names is not None:
-            policies = [policy for policy in policies if policy.get("key") in policy_names]
-        return policies
 
     def _configuration_node_text(self, configuration_node, child_name, empty_as_none=False):
         """
@@ -710,6 +685,8 @@ class Engine():
         :rtype: aboa.datamodel.archived_files.ArchivedFile
         """
         file_size = os.path.getsize(archive_path) if os.path.exists(archive_path) else 0
+        expiration_date = parse_datetime(metadata.get("expiration_date"))
+        delete_archive_configuration = archive_configuration if expiration_date is not None else None
         return ArchivedFile(
             uuid.uuid4(),
             os.path.basename(file_path),
@@ -719,6 +696,7 @@ class Engine():
             file_size,
             root_directory,
             archive_configuration=archive_configuration,
+            delete_archive_configuration=delete_archive_configuration,
             available=available,
             file_group=metadata.get("file_group"),
             file_type=metadata.get("file_type"),
@@ -727,7 +705,7 @@ class Engine():
             validity_start_date=parse_datetime(metadata.get("validity_start_date")),
             validity_stop_date=parse_datetime(metadata.get("validity_stop_date")),
             generation_date=parse_datetime(metadata.get("generation_date")),
-            expiration_date=parse_datetime(metadata.get("expiration_date")),
+            expiration_date=expiration_date,
             checksum=checksum,
         )
 
@@ -766,7 +744,7 @@ class Engine():
             self.session.add(archived_file)
 
         for status, message in failures:
-            self._record_failure("archive", status, message, archived_file)
+            self.record_failure("archive", status, message, archived_file)
         self.session.commit()
 
     def _execute_processor(self, processor_name, file_path):
@@ -863,7 +841,7 @@ class Engine():
                 digest.update(chunk)
         return digest.hexdigest()
 
-    def _record_failure(self, operation, status, message, archived_file=None):
+    def record_failure(self, operation, status, message, archived_file=None):
         """
         Add a failed operation row to the current session.
 

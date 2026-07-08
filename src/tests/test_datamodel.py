@@ -79,7 +79,7 @@ class TestDatamodel(unittest.TestCase):
             generation_date=datetime.datetime(2026, 7, 1, 12, 0, 0),
             expiration_date=datetime.datetime(2026, 7, 10, 0, 0, 0),
             removal_date=datetime.datetime(2026, 7, 4, 0, 0, 0),
-            removal_justification="retention:default",
+            removal_justification="retention_policy",
             checksum="abc123",
         )
 
@@ -112,7 +112,7 @@ class TestDatamodel(unittest.TestCase):
         assert structure["generation_date"] == "2026-07-01T12:00:00"
         assert structure["expiration_date"] == "2026-07-10T00:00:00"
         assert structure["removal_date"] == "2026-07-04T00:00:00"
-        assert structure["removal_justification"] == "retention:default"
+        assert structure["removal_justification"] == "retention_policy"
         assert structure["checksum"] == "abc123"
         
         query.close_session()
