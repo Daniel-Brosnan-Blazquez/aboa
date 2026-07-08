@@ -24,11 +24,11 @@ class Query():
     """
     Class for querying data stored in the ABOA inventory.
 
-    The query interface accepts EBOA-style filter dictionaries while mapping all
+    The query interface accepts ABOA filter dictionaries while mapping all
     fields and operators explicitly to SQLAlchemy expressions.
     """
 
-    # Public filter names map to SQLAlchemy columns explicitly. This keeps the EBOA
+    # Public filter names map to SQLAlchemy columns explicitly. This keeps the public
     # filter API shape while avoiding eval-based query construction.
     text_fields = {
         "file_uuids": ArchivedFile.file_uuid,
@@ -496,7 +496,7 @@ class Query():
 
     def _build_text_filter(self, column, text_filter):
         """
-        Build a SQLAlchemy predicate from an EBOA-style text filter.
+        Build a SQLAlchemy predicate from an ABOA text filter.
 
         :param column: SQLAlchemy column to filter
         :param text_filter: filter dictionary with filter and op keys

@@ -1,35 +1,31 @@
 # ABOA Archive Component Development Plan
 
 This plan describes how to develop the ABOA Archive component from the requirements in
-`ABOA_requirements.md`, following the code style, package layout, and operational
-patterns used by the EBOA component in `../eboa`.
+`ABOA_requirements.md`, defining the code style, package layout, and operational
+patterns for the component.
 
 ABOA stands for Archive for Business Operations Analysis. Its responsibility is to
 archive files on a POSIX file system, keep a PostgreSQL inventory of archived files,
 and expose archive, retrieval, delete, configuration, and retention capabilities
 through command line and REST APIs.
 
-## 1. Reference Architecture From EBOA
+## 1. Target Architecture
 
-Use EBOA as the implementation model for the first ABOA version:
+Use this architecture for the first ABOA version:
 
-- Package source under `src/aboa`, with subpackages matching EBOA's separation of
-  concerns: `datamodel`, `engine`, `archive`, `processors`, `common`, and `api`.
+- Package source under `src/aboa`, separated into concerns: `datamodel`, `engine`,
+  `archive`, `processors`, `common`, and `api`.
 - SQLAlchemy declarative model in `aboa.datamodel`, with `Base`, `Session`, and
-  `engine` initialized from a JSON configuration file, equivalent to
-  `eboa.datamodel.base`.
-- A high-level `Engine` class for mutating operations, equivalent in role to
-  `eboa.engine.engine.Engine`.
-- A `Query` class for read operations and inventory filtering, equivalent in role to
-  `eboa.engine.query.Query`.
-- Project-wide logging through `aboa.logging.Log`, keeping EBOA's rotating file
-  handler style, log format, environment-variable overrides, and custom log-level
-  pattern.
+  `engine` initialized from a JSON configuration file.
+- A high-level `Engine` class for mutating operations.
+- A `Query` class for read operations and inventory filtering.
+- Project-wide logging through `aboa.logging.Log`, using a rotating file handler,
+  log format, environment-variable overrides, and custom log-level pattern.
 - JSON configuration files in `src/config`, XSD files in `src/schemas`, database
   model artifacts in `src/datamodel`, scripts in `src/scripts`, and tests in
   `src/tests`.
-- Test structure based on EBOA's `unittest` style and database lifecycle:
-  instantiate `Query`, instantiate `Engine`, clear tables in `setUp`, and close
+- Test structure based on `unittest` style and database lifecycle: instantiate
+  `Query`, instantiate `Engine`, clear tables in `setUp`, and close
   sessions in `tearDown`.
 
 ## 2. Target Repository Layout
@@ -180,10 +176,10 @@ Implement matching SQLAlchemy entities under `aboa.datamodel`.
 ### 3.2 Model Conventions
 
 - Use SQLAlchemy classes with explicit `__tablename__`, typed columns, constructors,
-  and `jsonify()` methods, matching EBOA style.
+  and `jsonify()` methods, with consistent entity APIs.
 - Keep database access centralized through `aboa.datamodel.base.Session`.
-- Keep database configuration in `src/config/datamodel.json`, using the same
-  `DDBB_CONFIGURATION` structure as EBOA but with ABOA-specific defaults.
+- Keep database configuration in `src/config/datamodel.json`, using the
+  `DDBB_CONFIGURATION` structure with ABOA-specific defaults.
 - Add indexes for common retrieval filters: `name`, `path`, `archive_date`,
   `generation_date`, `validity_date`, `file_type`, `file_class`,
   `file_version`, `available`, and `removal_date`.
@@ -206,7 +202,7 @@ Implement `aboa.engine.engine.Engine` as the main mutation interface.
   configurations, store new configuration and root directory history.
 - `apply_retention(policy_names=None, dry_run=False)`: evaluate retention policies,
   mark matching files removed, and optionally delete physical files.
-- `close_session()`: close the SQLAlchemy session, following EBOA session hygiene.
+- `close_session()`: close the SQLAlchemy session and keep session lifecycle explicit.
 
 ### 4.2 Archive Behavior
 
@@ -234,7 +230,7 @@ Implement `aboa.engine.engine.Engine` as the main mutation interface.
 ### 4.3 Processor Behavior
 
 - Implement a processor contract in `aboa.processors.base_processor`.
-- Load configured processors dynamically, following EBOA's import-module pattern.
+- Load configured processors dynamically using an import-module pattern.
 - A processor receives the input file path and current metadata, and returns
   extracted metadata such as `file_type`, `file_class`, `file_version`,
   `validity_date`, and `generation_date`.
@@ -265,7 +261,7 @@ Support filters for all inventory metadata:
 - `removal_date_filters`
 - `available`
 
-Use EBOA-style filter dictionaries:
+Use structured filter dictionaries:
 
 ```python
 {"filter": "S2%", "op": "like"}
@@ -285,9 +281,8 @@ Support the required retrieval rules:
 - `all`: return all matching rows after pagination.
 - `limit` and `offset`: implement pagination with positive integer validation.
 
-Avoid `eval()` for new ABOA query code. EBOA uses `eval()` in places, but ABOA should
-keep the same API shape while mapping fields and operators through explicit
-dictionaries for safer code.
+Avoid `eval()` for new ABOA query code. Keep the dictionary-based filter API shape
+while mapping fields and operators through explicit dictionaries for safer code.
 
 ## 6. Configuration XML and XSD Plan
 
@@ -313,8 +308,7 @@ Validation rules:
 - `file_processor` is optional.
 
 Implement XML parsing in `aboa.archive.configuration`, using `lxml` and
-`xmlschema`/XSD validation in the same spirit as EBOA ingestion and triggering
-validation.
+`xmlschema`/XSD validation before storing or activating configurations.
 
 ## 7. CLI API Plan
 
@@ -327,8 +321,7 @@ Implement command line entry points through `setup.py` and/or scripts:
 - `aboa-configure --config <archive_configurations.xml>`
 - `aboa-retention --policy <name> [--dry-run]`
 
-Use `aboa.common.commands` for shared argument parsing and output formatting, similar
-to EBOA's common command utilities.
+Use `aboa.common.commands` for shared argument parsing and output formatting.
 
 ## 8. REST API Plan
 
@@ -347,7 +340,8 @@ Endpoints:
 - `GET /archive/configurations`: list active and historical configurations.
 - `POST /archive/retention/run`: evaluate retention policies.
 
-Return JSON structures from entity `jsonify()` methods, following EBOA's model.
+Return JSON structures from entity `jsonify()` methods, following the datamodel
+conventions.
 
 ## 9. Retention Policy Plan
 
@@ -379,7 +373,7 @@ Create:
 - `aboa.engine.errors`
 - `aboa.datamodel.errors`
 
-Follow EBOA's approach:
+Follow these logging conventions:
 
 - Rotating file logs under the configured log path.
 - Log level from config and environment variable overrides.
@@ -428,7 +422,7 @@ alongside implementation.
 
 ### 11.3 Coverage Gate
 
-- Configure coverage through `pytest-cov` or EBOA's existing test conventions.
+- Configure coverage through `pytest-cov` or the project's test conventions.
 - Set a project coverage target near 100 percent for ABOA-owned modules.
 - Keep tests deterministic by using temporary directories, controlled timestamps,
   and isolated database state.
@@ -439,8 +433,8 @@ alongside implementation.
 
 - Create `src/setup.py`, package folders, config folder, schema folder, scripts, and
   test folder.
-- Add install requirements aligned with EBOA: SQLAlchemy, psycopg2, lxml,
-  xmlschema, python-dateutil, Flask for REST, and pytest/coverage extras.
+- Add install requirements for SQLAlchemy, psycopg2, lxml, xmlschema,
+  python-dateutil, Flask for REST, and pytest/coverage extras.
 - Add `ABOA_RESOURCES_PATH`-based configuration loading.
 
 ### Phase 2: Database Inventory

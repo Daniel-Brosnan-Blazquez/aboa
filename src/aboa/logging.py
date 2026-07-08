@@ -31,7 +31,7 @@ class Log():
     """
     Configure and expose an ABOA logger.
 
-    The logger follows the EBOA rotating-file style and supports environment
+    The logger uses rotating file handlers and supports environment
     overrides for level, stream logging, maximum size, and backup count.
     """
 

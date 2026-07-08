@@ -135,7 +135,7 @@ def is_valid_order_by(order_by):
 
 def is_valid_text_filter(text_filter):
     """
-    Validate an EBOA-style text filter.
+    Validate an ABOA text filter.
 
     :param text_filter: dictionary with filter and op keys
     :type text_filter: dict
