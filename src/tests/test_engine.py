@@ -12,7 +12,13 @@ from pathlib import Path
 from aboa.datamodel.archived_files import ArchiveConfiguration, ArchivedFile, ArchiveOperation, ArchiveRootDirectory, FileToBeRemoved
 from aboa.engine import engine as engine_module
 from aboa.engine.engine import Engine
-from aboa.engine.errors import ArchiveConfigurationError, ArchiveDeletionError, ArchiveFileError, ArchiveRetrievalError
+from aboa.engine.errors import (
+    ArchiveConfigurationError,
+    ArchiveDeletionError,
+    ArchiveFileError,
+    ArchiveRecoveryError,
+    ArchiveRetrievalError,
+)
 from aboa.engine.query import Query
 
 
@@ -346,6 +352,54 @@ class TestEngine(unittest.TestCase):
         assert queued[0].removal_date == deleted[0].removal_date + datetime.timedelta(days=self.engine.final_removal_delay_days)
         assert os.path.exists(queued[0].path)
         assert "trash" in queued[0].path.split(os.sep)
+
+    def test_recover_files_from_trash(self):
+        """
+        Move a trashed payload back to its archive path and clear trash metadata.
+        """
+        input_file = self.input_file("sample.txt")
+        archived_file = self.archive_and_get(input_file)
+        archive_path = archived_file.path
+        self.engine.delete_files(file_uuids=[archived_file.file_uuid], physical_delete=True)
+        queued = self.engine.query.get_files_to_be_removed(file_uuids={"filter": [archived_file.file_uuid], "op": "in"})
+        trash_path = queued[0].path
+
+        recovered = self.engine.recover_files_from_trash(file_uuids=[archived_file.file_uuid])
+        remaining = self.engine.query.get_files_to_be_removed(file_uuids={"filter": [archived_file.file_uuid], "op": "in"})
+
+        assert len(recovered) == 1
+        assert recovered[0].file_uuid == archived_file.file_uuid
+        assert recovered[0].available is True
+        assert recovered[0].removal_date is None
+        assert recovered[0].removal_justification is None
+        assert recovered[0].path == archive_path
+        assert os.path.exists(archive_path)
+        assert not os.path.exists(trash_path)
+        assert remaining == []
+
+    def test_recover_files_from_trash_failure_is_recorded(self):
+        """
+        Record a recovery failure and leave the trash row queued for inspection.
+        """
+        input_file = self.input_file("sample.txt")
+        archived_file = self.archive_and_get(input_file)
+        self.engine.delete_files(file_uuids=[archived_file.file_uuid], physical_delete=True)
+        queued = self.engine.query.get_files_to_be_removed(file_uuids={"filter": [archived_file.file_uuid], "op": "in"})
+        trash_path = queued[0].path
+        os.unlink(trash_path)
+
+        with self.assertRaises(ArchiveRecoveryError):
+            self.engine.recover_files_from_trash(file_uuids=[archived_file.file_uuid])
+        remaining = self.engine.query.get_files_to_be_removed(file_uuids={"filter": [archived_file.file_uuid], "op": "in"})
+        operations = self.engine.query.get_archive_operations(operations={"filter": "recover", "op": "like"})
+
+        assert len(remaining) == 1
+        assert remaining[0].path == trash_path
+        assert archived_file.available is False
+        assert len(operations) == 1
+        assert operations[0].status == 13
+        assert operations[0].file_uuid == archived_file.file_uuid
+        assert trash_path in operations[0].message
 
     def test_trash_configuration_is_loaded_from_engine_configuration(self):
         """

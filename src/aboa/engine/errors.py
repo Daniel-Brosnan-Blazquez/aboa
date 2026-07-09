@@ -59,6 +59,11 @@ class ArchiveFinalRemovalError(Error):
     pass
 
 
+class ArchiveRecoveryError(Error):
+    """Raised when recovery from trash fails."""
+    pass
+
+
 class ProcessorError(Error):
     """Raised when a configured metadata processor cannot be executed correctly."""
     pass

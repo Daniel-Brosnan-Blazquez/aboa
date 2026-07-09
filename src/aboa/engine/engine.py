@@ -23,7 +23,14 @@ from aboa.datamodel.archived_files import (
     FileToBeRemoved,
 )
 from aboa.datamodel.base import Base, Session, engine as sqlalchemy_engine
-from aboa.engine.errors import ArchiveConfigurationError, ArchiveDeletionError, ArchiveFileError, ArchiveRetrievalError, ProcessorError
+from aboa.engine.errors import (
+    ArchiveConfigurationError,
+    ArchiveDeletionError,
+    ArchiveFileError,
+    ArchiveRecoveryError,
+    ArchiveRetrievalError,
+    ProcessorError,
+)
 from aboa.engine.functions import get_resources_path, parse_datetime, read_configuration
 from aboa.engine.parsing import get_archive_configuration
 from aboa.engine.query import Query
@@ -97,6 +104,10 @@ exit_codes = {
     "FINAL_REMOVAL_FAILED": {
         "status": 12,
         "message": "The final removal operation for file {} ended unexpectedly with the error: {}",
+    },
+    "RECOVERY_FAILED": {
+        "status": 13,
+        "message": "The recovery operation ended unexpectedly with the error: {}",
     },
 }
 
@@ -449,6 +460,66 @@ class Engine():
             self.record_failure("delete", exit_codes["DELETE_FAILED"]["status"], message)
             self.session.commit()
             raise ArchiveDeletionError(message) from exc
+
+    def recover_files_from_trash(self, filters=None, file_uuids=None, file_to_remove_uuids=None):
+        """
+        Recover physically deleted archive payloads from trash.
+
+        Recovery moves each queued trash payload back to its original archive
+        path, marks the archived file available again, and removes the pending
+        final-removal row. Existing archive-path payloads are never overwritten.
+
+        :param filters: query filters accepted by ``Query.get_files_to_be_removed``
+        :type filters: dict or None
+        :param file_uuids: optional archived-file UUIDs to recover
+        :type file_uuids: list or None
+        :param file_to_remove_uuids: optional trash-queue UUIDs to recover
+        :type file_to_remove_uuids: list or None
+
+        :return: recovered archive inventory entities
+        :rtype: list
+
+        :raises ArchiveRecoveryError: when lookup or filesystem recovery fails
+        """
+        try:
+            filters = dict(filters or {})
+            if file_uuids is not None:
+                filters["file_uuids"] = {"filter": file_uuids, "op": "in"}
+            if file_to_remove_uuids is not None:
+                filters["file_to_remove_uuids"] = {"filter": file_to_remove_uuids, "op": "in"}
+
+            rows = self.query.get_files_to_be_removed(**filters)
+            recovered_files = []
+            failures = []
+            for file_to_be_removed in rows:
+                try:
+                    recovered_files.append(self._recover_file_from_trash(file_to_be_removed))
+                except Exception as exc:
+                    message = "file {}: {}".format(file_to_be_removed.path, exc)
+                    logger.error(message)
+                    self.record_failure(
+                        "recover",
+                        exit_codes["RECOVERY_FAILED"]["status"],
+                        exit_codes["RECOVERY_FAILED"]["message"].format(message),
+                        file_to_be_removed.archivedFile,
+                    )
+                    failures.append(message)
+
+            self.session.commit()
+            if len(failures) > 0:
+                raise ArchiveRecoveryError(exit_codes["RECOVERY_FAILED"]["message"].format("; ".join(failures)))
+
+            logger.info("Recovery request performed on {} file/s".format(len(recovered_files)))
+            return recovered_files
+        except ArchiveRecoveryError:
+            raise
+        except Exception as exc:
+            self.session.rollback()
+            message = exit_codes["RECOVERY_FAILED"]["message"].format(exc)
+            logger.error(message)
+            self.record_failure("recover", exit_codes["RECOVERY_FAILED"]["status"], message)
+            self.session.commit()
+            raise ArchiveRecoveryError(message) from exc
 
     def _match_configuration(self, file_path):
         """
@@ -920,6 +991,41 @@ class Engine():
         trash_path = os.path.join(directory, trash_name)
 
         return trash_path
+
+    def _recover_file_from_trash(self, file_to_be_removed):
+        """
+        Move one pending trash payload back to its archived path.
+
+        :param file_to_be_removed: trash-queue row to recover
+        :type file_to_be_removed: aboa.datamodel.archived_files.FileToBeRemoved
+
+        :return: recovered archived-file entity
+        :rtype: aboa.datamodel.archived_files.ArchivedFile
+
+        :raises ArchiveRecoveryError: when recovery would lose data or the trash
+            payload is missing
+        """
+        archived_file = file_to_be_removed.archivedFile
+        if archived_file is None:
+            raise ArchiveRecoveryError("The trash row is not linked to an archived file")
+        if not os.path.exists(file_to_be_removed.path):
+            raise ArchiveRecoveryError("The trash payload {} does not exist".format(file_to_be_removed.path))
+        if os.path.exists(archived_file.path):
+            raise ArchiveRecoveryError("The archive payload {} already exists".format(archived_file.path))
+
+        archive_directory = os.path.dirname(archived_file.path)
+        if archive_directory != "":
+            os.makedirs(archive_directory, exist_ok=True)
+        shutil.move(file_to_be_removed.path, archived_file.path)
+
+        archived_file.available = True
+        archived_file.removal_date = None
+        archived_file.removal_justification = None
+        archived_file.file_size = os.path.getsize(archived_file.path)
+        if archived_file.expiration_date is not None and archived_file.deleteArchiveConfiguration is None:
+            archived_file.deleteArchiveConfiguration = archived_file.archiveConfiguration
+        self.session.delete(file_to_be_removed)
+        return archived_file
 
     def _store_file(self, source_path, destination_path):
         """

@@ -30,6 +30,7 @@ setup(
             "aboa_archive=aboa.engine.commands:aboa_archive",
             "aboa_retrieve=aboa.engine.commands:aboa_retrieve",
             "aboa_delete=aboa.engine.commands:aboa_delete",
+            "aboa_recover=aboa.engine.commands:aboa_recover",
             "aboa_clean_up=aboa.engine.commands:aboa_clean_up",
         ]
     },
