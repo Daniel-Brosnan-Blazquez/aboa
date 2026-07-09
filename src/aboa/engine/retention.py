@@ -8,6 +8,7 @@ import datetime
 import os
 
 from aboa.datamodel.archived_files import ArchivedFile, FileToBeRemoved
+from aboa.engine.errors import ArchiveFinalRemovalError, ArchiveRetentionError
 
 
 RETENTION_REMOVAL_JUSTIFICATION = "retention_policy"
@@ -45,12 +46,11 @@ def apply_retention(engine, dry_run=False):
         return candidates
     except Exception as exc:
         engine.session.rollback()
-        if hasattr(engine, "get_exit_code") and hasattr(engine, "record_failure"):
-            exit_code = engine.get_exit_code("RETENTION_FAILED")
-            message = exit_code["message"].format(exc)
-            engine.record_failure("retention", exit_code["status"], message)
-            engine.session.commit()
-        raise
+        exit_code = engine.get_exit_code("RETENTION_FAILED")
+        message = exit_code["message"].format(exc)
+        engine.record_failure("retention", exit_code["status"], message)
+        engine.session.commit()
+        raise ArchiveRetentionError(message) from exc
 
 
 def apply_final_removal(engine, dry_run=False, now=None):
@@ -71,26 +71,30 @@ def apply_final_removal(engine, dry_run=False, now=None):
     :rtype: list
     """
     now = now or datetime.datetime.utcnow()
-    candidates = get_files_ready_for_final_removal(engine.session, now)
-    if dry_run:
-        return candidates
 
     try:
+        candidates = get_files_ready_for_final_removal(engine.session, now)
+        if dry_run:
+            return candidates
+
         for file_to_be_removed in candidates:
             try:
                 if os.path.exists(file_to_be_removed.path):
                     os.unlink(file_to_be_removed.path)
                 engine.session.delete(file_to_be_removed)
             except Exception as exc:
-                if hasattr(engine, "get_exit_code") and hasattr(engine, "record_failure"):
-                    exit_code = engine.get_exit_code("FINAL_REMOVAL_FAILED")
-                    message = exit_code["message"].format(file_to_be_removed.path, exc)
-                    engine.record_failure("final_removal", exit_code["status"], message, file_to_be_removed.archivedFile)
+                exit_code = engine.get_exit_code("FINAL_REMOVAL_FAILED")
+                message = exit_code["message"].format(file_to_be_removed.path, exc)
+                engine.record_failure("final_removal", exit_code["status"], message, file_to_be_removed.archivedFile)
         engine.session.commit()
         return candidates
-    except Exception:
+    except Exception as exc:
         engine.session.rollback()
-        raise
+        exit_code = engine.get_exit_code("FINAL_REMOVAL_FAILED")
+        message = exit_code["message"].format("final_removal", exc)
+        engine.record_failure("final_removal", exit_code["status"], message)
+        engine.session.commit()
+        raise ArchiveFinalRemovalError(message) from exc
 
 
 def get_expired_files(session, now=None):

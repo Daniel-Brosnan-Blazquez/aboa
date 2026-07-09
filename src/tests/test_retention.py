@@ -12,6 +12,7 @@ from pathlib import Path
 from aboa.engine.engine import Engine
 from aboa.engine.query import Query
 from aboa.engine import retention as retention_module
+from aboa.engine.errors import ArchiveRetentionError
 from aboa.engine.retention import RETENTION_REMOVAL_JUSTIFICATION, apply_final_removal, apply_retention
 
 
@@ -163,3 +164,24 @@ class TestRetention(unittest.TestCase):
         assert operations[0].status == 12
         assert operations[0].file_uuid == queued.file_uuid
         assert "permission denied" in operations[0].message
+
+    def test_retention_failure_raises_specific_exception(self):
+        """
+        Convert retention cleanup failures into ArchiveRetentionError.
+        """
+        original_get_expired_files = retention_module.get_expired_files
+
+        def fail_get_expired_files(session, now=None):
+            raise ValueError("retention query failed")
+
+        try:
+            retention_module.get_expired_files = fail_get_expired_files
+            with self.assertRaises(ArchiveRetentionError):
+                apply_retention(self.engine)
+        finally:
+            retention_module.get_expired_files = original_get_expired_files
+        operations = self.engine.query.get_archive_operations(operations={"filter": "retention", "op": "like"})
+
+        assert len(operations) == 1
+        assert operations[0].status == 10
+        assert "retention query failed" in operations[0].message

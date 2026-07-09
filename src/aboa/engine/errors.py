@@ -49,6 +49,16 @@ class ArchiveRetrievalError(Error):
     pass
 
 
+class ArchiveRetentionError(Error):
+    """Raised when retention cleanup fails."""
+    pass
+
+
+class ArchiveFinalRemovalError(Error):
+    """Raised when final trash removal fails."""
+    pass
+
+
 class ProcessorError(Error):
     """Raised when a configured metadata processor cannot be executed correctly."""
     pass
