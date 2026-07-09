@@ -371,9 +371,9 @@ class Engine():
         logger.info("Archive request performed for file {}".format(file_path))
         return None
 
-    def retrieve_files(self, filters=None, order_by=None, group_by=None, selection="all", limit=None, offset=None):
+    def retrieve_files(self, filters=None, order_by=None, group_by=None, selection="all", limit=None, offset=None, destination_path=None):
         """
-        Retrieve archived file inventory entries and update last-access metadata.
+        Retrieve archived file inventory entries, optionally copying payloads.
 
         :param filters: query filters accepted by ``Query.get_archived_files``
         :type filters: dict or None
@@ -387,6 +387,8 @@ class Engine():
         :type limit: int or None
         :param offset: result offset
         :type offset: int or None
+        :param destination_path: optional folder where selected payloads are copied
+        :type destination_path: str or None
 
         :return: list of archived files, or grouped dictionary when ``group_by`` is set
         :rtype: list or dict
@@ -403,10 +405,12 @@ class Engine():
                 iterable = [item for group in files.values() for item in group]
             else:
                 iterable = files
+            self._copy_retrieved_files(iterable, destination_path)
             now = datetime.datetime.utcnow()
             for archived_file in iterable:
                 archived_file.last_access_date = now
             self.session.commit()
+            logger.info("Retrieve request performed on {} file/s".format(len(iterable)))
             return files
         except Exception as exc:
             self.session.rollback()
@@ -415,6 +419,69 @@ class Engine():
             self.record_failure("retrieve", exit_codes["RETRIEVE_FAILED"]["status"], message)
             self.session.commit()
             raise ArchiveRetrievalError(message) from exc
+
+    def _copy_retrieved_files(self, archived_files, destination_path=None):
+        """
+        Copy retrieved payloads into a user-supplied destination folder.
+
+        :param archived_files: archived-file rows selected for retrieval
+        :type archived_files: list
+        :param destination_path: folder where payloads are copied
+        :type destination_path: str or None
+
+        :return: None
+        :rtype: None
+        """
+        if destination_path is None:
+            return
+
+        if os.path.exists(destination_path) and not os.path.isdir(destination_path):
+            raise ValueError("The destination path {} is not a directory".format(destination_path))
+        os.makedirs(destination_path, exist_ok=True)
+
+        copied_paths = set()
+        for archived_file in archived_files:
+            if not os.path.exists(archived_file.path):
+                raise ValueError("The archived payload {} does not exist".format(archived_file.path))
+
+            destination_file = self._build_retrieval_destination_path(destination_path, archived_file, copied_paths)
+            shutil.copy2(archived_file.path, destination_file)
+            copied_paths.add(destination_file)
+            logger.info("Retrieved file {} copied to {}".format(archived_file.file_uuid, destination_file))
+
+    def _build_retrieval_destination_path(self, destination_path, archived_file, copied_paths=None):
+        """
+        Build a destination path for a retrieved payload without overwriting files.
+
+        :param destination_path: retrieval destination folder
+        :type destination_path: str
+        :param archived_file: archived-file row selected for retrieval
+        :type archived_file: aboa.datamodel.archived_files.ArchivedFile
+        :param copied_paths: paths already used by this retrieval batch
+        :type copied_paths: set or None
+
+        :return: collision-safe retrieval destination path
+        :rtype: str
+        """
+        copied_paths = copied_paths or set()
+        file_name = archived_file.name or os.path.basename(archived_file.path)
+        candidate = os.path.join(destination_path, file_name)
+        if not os.path.exists(candidate) and candidate not in copied_paths:
+            return candidate
+
+        base, extension = os.path.splitext(file_name)
+        unique_name = "{}_{}{}".format(base, archived_file.file_uuid, extension)
+        candidate = os.path.join(destination_path, unique_name)
+        if not os.path.exists(candidate) and candidate not in copied_paths:
+            return candidate
+
+        counter = 1
+        while True:
+            numbered_name = "{}_{}_{}{}".format(base, archived_file.file_uuid, counter, extension)
+            candidate = os.path.join(destination_path, numbered_name)
+            if not os.path.exists(candidate) and candidate not in copied_paths:
+                return candidate
+            counter += 1
 
     def delete_files(self, filters=None, file_uuids=None, physical_delete=False, removal_justification="manual_delete"):
         """

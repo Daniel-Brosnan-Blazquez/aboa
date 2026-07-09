@@ -35,6 +35,7 @@ class Query():
         "file_uuids": ArchivedFile.file_uuid,
         "names": ArchivedFile.name,
         "paths": ArchivedFile.path,
+        "root_directory_uuids": ArchivedFile.root_directory_uuid,
         "file_group": ArchivedFile.file_group,
         "file_type": ArchivedFile.file_type,
         "file_class": ArchivedFile.file_class,
@@ -42,6 +43,7 @@ class Query():
         "archive_configuration_uuids": ArchivedFile.archive_configuration_uuid,
         "delete_archive_configuration_uuids": ArchivedFile.delete_archive_configuration_uuid,
         "removal_justification": ArchivedFile.removal_justification,
+        "checksum": ArchivedFile.checksum,
     }
     date_fields = {
         "reception_date_filters": ArchivedFile.reception_date,
@@ -61,6 +63,7 @@ class Query():
         "archive_date": ArchivedFile.archive_date,
         "file_size": ArchivedFile.file_size,
         "available": ArchivedFile.available,
+        "root_directory_uuid": ArchivedFile.root_directory_uuid,
         "last_access_date": ArchivedFile.last_access_date,
         "file_group": ArchivedFile.file_group,
         "file_type": ArchivedFile.file_type,
@@ -74,6 +77,7 @@ class Query():
         "removal_justification": ArchivedFile.removal_justification,
         "archive_configuration_uuid": ArchivedFile.archive_configuration_uuid,
         "delete_archive_configuration_uuid": ArchivedFile.delete_archive_configuration_uuid,
+        "checksum": ArchivedFile.checksum,
     }
     archive_root_directory_text_fields = {
         "root_directory_uuids": ArchiveRootDirectory.root_directory_uuid,
@@ -194,13 +198,14 @@ class Query():
     def get_archived_files(self, file_uuids=None, names=None, paths=None,
                            reception_date_filters=None, archive_date_filters=None,
                            file_size_filters=None, available=None,
-                           last_access_date_filters=None, file_group=None,
+                           root_directory_uuids=None, last_access_date_filters=None, file_group=None,
                            file_type=None, file_class=None, file_version=None,
                            archive_configuration_uuids=None,
                            delete_archive_configuration_uuids=None,
                            validity_start_date_filters=None, validity_stop_date_filters=None,
                            generation_date_filters=None, expiration_date_filters=None,
                            removal_date_filters=None, removal_justification=None,
+                           checksum=None,
                            order_by=None, group_by=None,
                            selection="all", limit=None, offset=None):
         """
@@ -213,6 +218,7 @@ class Query():
         :param archive_date_filters: archive date filters
         :param file_size_filters: file size numeric filters
         :param available: availability boolean filter
+        :param root_directory_uuids: root-directory UUID text filter
         :param last_access_date_filters: last access date filters
         :param file_group: file group text filter
         :param file_type: file type text filter
@@ -226,6 +232,7 @@ class Query():
         :param expiration_date_filters: expiration date filters
         :param removal_date_filters: removal date filters
         :param removal_justification: removal reason text filter
+        :param checksum: checksum text filter
         :param order_by: ordering descriptor with field and descending keys
         :param group_by: field used to group complete entity results
         :param selection: selection rule: all, first, or last

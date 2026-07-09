@@ -5,7 +5,6 @@ Tests for retention cleanup execution.
 import datetime
 import os
 import shutil
-import tempfile
 import unittest
 from pathlib import Path
 
@@ -23,73 +22,66 @@ class TestRetention(unittest.TestCase):
 
     def setUp(self):
         """
-        Prepare a clean inventory with one temporary archive configuration.
+        Prepare a clean inventory and fixture-backed archive root.
         """
         # Retention cleanup reads only archived-file expiration_date values; the
-        # archive configuration deliberately has no runtime retention policy.
+        # archive configuration fixture deliberately has no runtime retention policy.
         query = Query()
         query.clear_db()
         query.close_session()
-        self.test_root = Path(tempfile.mkdtemp(prefix="aboa_test_"))
-        self.archive_root = self.test_root / "archive"
-        self.archive_root.mkdir()
-        self.input_root = self.test_root / "inputs"
-        self.input_root.mkdir()
-        self.configuration_file = str(self.write_archive_configuration(
-            "archive_configuration.xml",
-            """<archive_configurations root_directory="{}">
-  <archive_configuration file_group="group_a">
-    <file_mask>*.txt</file_mask>
-    <file_directory>texts</file_directory>
-  </archive_configuration>
-</archive_configurations>""".format(self.archive_root),
-        ))
+        self.inputs_path = Path(__file__).parent / "inputs"
+        self.archive_root = Path("/tmp/aboa_test_retention_archive")
+        shutil.rmtree(str(self.archive_root), ignore_errors=True)
+        self.configuration_file = str(self.inputs_path / "retention_archive_configuration.xml")
         self.engine = Engine()
-        self.engine._load_archive_configuration(self.configuration_file)
+        self.engine.set_configuration_path(self.configuration_file)
 
     def tearDown(self):
         """
-        Close sessions, clear rows, and remove temporary files.
+        Close sessions, clear rows, and remove temporary archive files.
         """
         self.engine.close_session()
         query = Query()
         query.clear_db()
         query.close_session()
-        shutil.rmtree(str(self.test_root), ignore_errors=True)
+        shutil.rmtree(str(self.archive_root), ignore_errors=True)
 
-    def make_file(self, name, content="hello"):
+    def input_file(self, name):
         """
-        Create an input fixture file inside the test input root.
+        Return a fixture input path by file name.
         """
-        path = self.input_root / name
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(content)
-        return path
+        return self.inputs_path / name
 
-    def write_archive_configuration(self, name, content):
+    def archive_file(self, input_file, **metadata):
         """
-        Write an archive configuration fixture inside the test root.
+        Archive a fixture with optional metadata and return the inventory row.
         """
-        path = self.test_root / name
-        path.write_text(content)
-        return path
+        assert self.engine.archive_file(str(input_file), metadata=metadata) is None
+        return self.engine.query.get_archived_files(
+            names={"filter": [Path(input_file).name], "op": "in"},
+            selection="last",
+        )[0]
 
     def test_retention_dry_run_and_execution(self):
         """
         Return retention candidates in dry-run and delete them on execution.
         """
-        input_file = self.make_file("sample.txt")
-        future_file = self.make_file("future.txt")
-        no_expiration_file = self.make_file("no_expiration.txt")
+        input_file = self.input_file("sample.txt")
+        future_file = self.input_file("query_a.txt")
+        no_expiration_file = self.input_file("query_b.txt")
         # Expiration is in the past, making the file eligible without consulting
         # any runtime retention policy configuration.
-        assert self.engine.archive_file(str(input_file), metadata={"file_type": "text", "expiration_date": datetime.datetime.utcnow() - datetime.timedelta(days=1)}) is None
-        assert self.engine.archive_file(str(future_file), metadata={"file_type": "text", "expiration_date": datetime.datetime.utcnow() + datetime.timedelta(days=1)}) is None
-        assert self.engine.archive_file(str(no_expiration_file), metadata={"file_type": "text"}) is None
-        archived_file = self.engine.query.get_archived_files(
-            names={"filter": [input_file.name], "op": "in"},
-            selection="last",
-        )[0]
+        archived_file = self.archive_file(
+            input_file,
+            file_type="text",
+            expiration_date=datetime.datetime.utcnow() - datetime.timedelta(days=1),
+        )
+        self.archive_file(
+            future_file,
+            file_type="text",
+            expiration_date=datetime.datetime.utcnow() + datetime.timedelta(days=1),
+        )
+        self.archive_file(no_expiration_file, file_type="text")
         assert archived_file.deleteArchiveConfiguration is not None
         assert archived_file.deleteArchiveConfiguration.path == self.configuration_file
 
@@ -114,8 +106,12 @@ class TestRetention(unittest.TestCase):
         """
         Permanently delete trash payloads after the 30-day grace period.
         """
-        input_file = self.make_file("sample.txt")
-        assert self.engine.archive_file(str(input_file), metadata={"file_type": "text", "expiration_date": datetime.datetime.utcnow() - datetime.timedelta(days=1)}) is None
+        input_file = self.input_file("sample.txt")
+        self.archive_file(
+            input_file,
+            file_type="text",
+            expiration_date=datetime.datetime.utcnow() - datetime.timedelta(days=1),
+        )
         apply_retention(self.engine, dry_run=False)
         queued = self.engine.query.get_files_to_be_removed()[0]
         queued.removal_date = datetime.datetime.utcnow() - datetime.timedelta(days=1)
@@ -134,8 +130,12 @@ class TestRetention(unittest.TestCase):
         """
         Register final-removal failures and keep the queue row for retry.
         """
-        input_file = self.make_file("sample.txt")
-        assert self.engine.archive_file(str(input_file), metadata={"file_type": "text", "expiration_date": datetime.datetime.utcnow() - datetime.timedelta(days=1)}) is None
+        input_file = self.input_file("sample.txt")
+        self.archive_file(
+            input_file,
+            file_type="text",
+            expiration_date=datetime.datetime.utcnow() - datetime.timedelta(days=1),
+        )
         apply_retention(self.engine, dry_run=False)
         queued = self.engine.query.get_files_to_be_removed()[0]
         queued.removal_date = datetime.datetime.utcnow() - datetime.timedelta(days=1)
