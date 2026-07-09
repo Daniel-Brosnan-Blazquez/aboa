@@ -137,6 +137,18 @@ class TestConfiguration(unittest.TestCase):
         with self.assertRaises(ArchiveConfigurationError):
             get_archive_configuration(input_configuration("example_missing_attribute.xml"))
 
+    def test_reserved_file_directories_are_rejected(self):
+        """
+        Reject file_directory values reserved by ABOA internal archive areas.
+        """
+        for configuration_name in (
+            "example_reserved_unknown_directory.xml",
+            "example_reserved_trash_directory.xml",
+        ):
+            with self.subTest(configuration_name=configuration_name):
+                with self.assertRaises(ArchiveConfigurationError):
+                    get_archive_configuration(input_configuration(configuration_name))
+
     def test_multiple_archive_rule_retention_policies_are_rejected(self):
         """
         Reject more than one retention policy inside a single archive rule.

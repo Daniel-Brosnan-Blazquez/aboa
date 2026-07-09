@@ -106,7 +106,7 @@ class TestRetention(unittest.TestCase):
         assert executed[0].removal_justification == RETENTION_REMOVAL_JUSTIFICATION
         assert not os.path.exists(executed[0].path)
         assert len(queued) == 1
-        assert queued[0].removal_date == executed[0].removal_date + datetime.timedelta(days=30)
+        assert queued[0].removal_date == executed[0].removal_date + datetime.timedelta(days=self.engine.final_removal_delay_days)
         assert os.path.exists(queued[0].path)
         assert "trash" in queued[0].path.split(os.sep)
 

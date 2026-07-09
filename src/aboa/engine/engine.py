@@ -24,7 +24,7 @@ from aboa.datamodel.archived_files import (
 )
 from aboa.datamodel.base import Base, Session, engine as sqlalchemy_engine
 from aboa.engine.errors import ArchiveConfigurationError, ArchiveDeletionError, ArchiveFileError, ArchiveRetrievalError, ProcessorError
-from aboa.engine.functions import get_resources_path, parse_datetime
+from aboa.engine.functions import get_resources_path, parse_datetime, read_configuration
 from aboa.engine.parsing import get_archive_configuration
 from aboa.engine.query import Query
 from aboa.engine.xpath_functions import register_xpath_functions
@@ -100,8 +100,8 @@ exit_codes = {
     },
 }
 
-TRASH_DIRECTORY_NAME = "trash"
-FINAL_REMOVAL_DELAY_DAYS = 30
+DEFAULT_TRASH_DIRECTORY_NAME = "trash"
+DEFAULT_FINAL_REMOVAL_DELAY_DAYS = 30
 
 
 class Engine():
@@ -133,6 +133,9 @@ class Engine():
         self.query = Query(session=self.session)
         self.configuration_xpath = None
         self.configuration_path = None
+        self.engine_configuration = read_configuration()
+        self.trash_directory = self._configured_trash_directory()
+        self.final_removal_delay_days = self._configured_final_removal_delay_days()
 
     def get_exit_codes(self):
         """
@@ -156,6 +159,40 @@ class Engine():
         :raises KeyError: when the exit-code key is unknown
         """
         return self.get_exit_codes()[name]
+
+    def _configured_trash_directory(self):
+        """
+        Return the trash directory name configured for archived payload removal.
+
+        :return: configured trash directory name, or default ``trash``
+        :rtype: str
+        """
+        archive_configuration = self.engine_configuration.get("ARCHIVE", {})
+        trash_directory = archive_configuration.get("TRASH_DIRECTORY", DEFAULT_TRASH_DIRECTORY_NAME)
+        if trash_directory is None or str(trash_directory).strip() == "":
+            return DEFAULT_TRASH_DIRECTORY_NAME
+        return str(trash_directory).strip()
+
+    def _configured_final_removal_delay_days(self):
+        """
+        Return how many days trashed payloads wait before final removal.
+
+        :return: configured delay in days, or default ``30``
+        :rtype: int
+
+        :raises ArchiveConfigurationError: when the configured value is invalid
+        """
+        archive_configuration = self.engine_configuration.get("ARCHIVE", {})
+        delay_days = archive_configuration.get("FINAL_REMOVAL_DELAY_DAYS", DEFAULT_FINAL_REMOVAL_DELAY_DAYS)
+        if delay_days is None or str(delay_days).strip() == "":
+            return DEFAULT_FINAL_REMOVAL_DELAY_DAYS
+        try:
+            delay_days = int(delay_days)
+        except (TypeError, ValueError) as exc:
+            raise ArchiveConfigurationError("The final removal delay days must be an integer") from exc
+        if delay_days < 0:
+            raise ArchiveConfigurationError("The final removal delay days must be positive")
+        return delay_days
 
     def set_configuration_path(self, configuration_path):
         """
@@ -827,7 +864,7 @@ class Engine():
             return self._get_file_to_be_removed(archived_file)
 
         removal_date = removal_date or datetime.datetime.utcnow()
-        final_removal_date = removal_date + datetime.timedelta(days=FINAL_REMOVAL_DELAY_DAYS)
+        final_removal_date = removal_date + datetime.timedelta(days=self.final_removal_delay_days)
         root_directory = archived_file.rootDirectory
         if root_directory is None:
             root_directory = self.session.query(ArchiveRootDirectory).filter(
@@ -873,7 +910,7 @@ class Engine():
         """
         directory = os.path.join(
             root_directory,
-            TRASH_DIRECTORY_NAME,
+            self.trash_directory,
             removal_date.strftime("%Y"),
             removal_date.strftime("%m"),
             removal_date.strftime("%d"),

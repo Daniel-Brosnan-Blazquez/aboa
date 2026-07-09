@@ -7,7 +7,7 @@
           <xs:complexType>
             <xs:sequence>
               <xs:element name="file_mask" type="NonEmptyString"/>
-              <xs:element name="file_directory" type="NonUnknownDirectory"/>
+              <xs:element name="file_directory" type="NonEmptyString"/>
               <xs:element name="file_processor" type="xs:string" minOccurs="0"/>
               <xs:element name="retention_policy" type="RetentionPolicyType" minOccurs="0" maxOccurs="1"/>
             </xs:sequence>
@@ -50,10 +50,4 @@
     </xs:simpleContent>
   </xs:complexType>
 
-  <xs:simpleType name="NonUnknownDirectory">
-    <xs:restriction base="xs:string">
-      <xs:minLength value="1"/>
-      <xs:pattern value="(.{1,6}|.{8,}|[^u].*|u[^n].*|un[^k].*|unk[^n].*|unkn[^o].*|unkno[^w].*)"/>
-    </xs:restriction>
-  </xs:simpleType>
 </xs:schema>

@@ -15,6 +15,8 @@ from aboa.engine.functions import get_schemas_path
 
 logger = logging.getLogger(__name__)
 
+RESERVED_FILE_DIRECTORIES = {"unknown", "trash"}
+
 
 def _validate_with_lxml(configuration_xml):
     """
@@ -87,6 +89,27 @@ def _warn_duplicated_archive_configuration_fields(configuration_xml):
                 )
 
 
+def _validate_reserved_file_directories(configuration_xml):
+    """
+    Reject archive rules using directories reserved by ABOA internals.
+
+    :param configuration_xml: parsed XML configuration file
+    :type configuration_xml: lxml.etree.ElementTree
+
+    :return: None
+    :rtype: None
+
+    :raises ArchiveConfigurationError: when an archive rule uses a reserved directory
+    """
+    archive_configurations = configuration_xml.xpath("/archive_configurations/archive_configuration")
+    for archive_configuration in archive_configurations:
+        file_directory = archive_configuration.xpath("string(file_directory)").strip()
+        if file_directory in RESERVED_FILE_DIRECTORIES:
+            raise ArchiveConfigurationError(
+                "The file_directory value {} is reserved by ABOA".format(file_directory)
+            )
+
+
 def get_archive_configuration(configuration_path, validate_schema=True):
     """
     Parse an ABOA archive configuration XML file.
@@ -120,6 +143,7 @@ def get_archive_configuration(configuration_path, validate_schema=True):
     if validate_schema:
         _validate_with_lxml(configuration_xml)
 
+    _validate_reserved_file_directories(configuration_xml)
     _warn_duplicated_archive_configuration_fields(configuration_xml)
 
     configuration_xpath = etree.XPathEvaluator(configuration_xml)

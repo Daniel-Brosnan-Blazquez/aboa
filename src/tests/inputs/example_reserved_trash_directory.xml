@@ -1,0 +1,6 @@
+<archive_configurations root_directory="/tmp/aboa_archive">
+  <archive_configuration file_group="bad_directory">
+    <file_mask>*.txt</file_mask>
+    <file_directory>trash</file_directory>
+  </archive_configuration>
+</archive_configurations>

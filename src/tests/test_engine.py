@@ -10,6 +10,7 @@ import unittest
 from pathlib import Path
 
 from aboa.datamodel.archived_files import ArchiveConfiguration, ArchivedFile, ArchiveOperation, ArchiveRootDirectory, FileToBeRemoved
+from aboa.engine import engine as engine_module
 from aboa.engine.engine import Engine
 from aboa.engine.errors import ArchiveConfigurationError, ArchiveDeletionError, ArchiveFileError, ArchiveRetrievalError
 from aboa.engine.query import Query
@@ -342,9 +343,42 @@ class TestEngine(unittest.TestCase):
         assert queued[0].file_to_remove_uuid is not None
         assert queued[0].file_uuid == deleted[0].file_uuid
         assert queued[0].root_directory_uuid == deleted[0].root_directory_uuid
-        assert queued[0].removal_date == deleted[0].removal_date + datetime.timedelta(days=30)
+        assert queued[0].removal_date == deleted[0].removal_date + datetime.timedelta(days=self.engine.final_removal_delay_days)
         assert os.path.exists(queued[0].path)
         assert "trash" in queued[0].path.split(os.sep)
+
+    def test_trash_configuration_is_loaded_from_engine_configuration(self):
+        """
+        Move physical deletions using trash settings configured in engine.json.
+        """
+        original_read_configuration = engine_module.read_configuration
+        engine = None
+
+        def read_custom_configuration():
+            configuration = original_read_configuration()
+            configuration.setdefault("ARCHIVE", {})["TRASH_DIRECTORY"] = "custom_trash"
+            configuration["ARCHIVE"]["FINAL_REMOVAL_DELAY_DAYS"] = 7
+            return configuration
+
+        try:
+            engine_module.read_configuration = read_custom_configuration
+            engine = Engine()
+            engine.set_configuration_path(self.configuration_file)
+            archived_file = self.archive_and_get(self.input_file("sample.txt"), engine=engine)
+            deleted = engine.delete_files(file_uuids=[archived_file.file_uuid], physical_delete=True)
+            queued = engine.query.get_files_to_be_removed(file_uuids={"filter": [archived_file.file_uuid], "op": "in"})
+
+            assert engine.trash_directory == "custom_trash"
+            assert engine.final_removal_delay_days == 7
+            assert len(queued) == 1
+            assert queued[0].removal_date == deleted[0].removal_date + datetime.timedelta(days=7)
+            assert "custom_trash" in queued[0].path.split(os.sep)
+            assert not os.path.exists(deleted[0].path)
+            assert os.path.exists(queued[0].path)
+        finally:
+            engine_module.read_configuration = original_read_configuration
+            if engine is not None:
+                engine.close_session()
 
     def test_delete_files_raises_archive_deletion_error_on_failure(self):
         """
