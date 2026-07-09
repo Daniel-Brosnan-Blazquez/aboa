@@ -1,0 +1,18 @@
+# Github actions for testing ABOA
+name: "ABOA testing"
+on:
+  push:
+    branches:
+      - "*"
+
+jobs:
+  # Integration Test
+  tests:
+    name: "Integration Test"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: "Set up environment"
+        run: GITHUB_BRANCH=${{ github.ref_name }} REPOSITORY_URI=${{ github.server_url }}/${{ github.repository }} docker compose -f compose_github_dev.yml up -d --wait
+      - name: "Test ABOA"
+        run: docker exec aboa bash -c "/scripts/initialize_aboa_ddbb.sh; cd /aboa/src; py.test -vv tests/"
