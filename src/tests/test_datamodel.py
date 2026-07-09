@@ -9,7 +9,7 @@ import unittest
 import uuid
 from pathlib import Path
 
-from aboa.datamodel.archived_files import ArchiveConfiguration, ArchivedFile, ArchiveOperation, ArchiveRootDirectory
+from aboa.datamodel.archived_files import ArchiveConfiguration, ArchivedFile, ArchiveOperation, ArchiveRootDirectory, FileToBeRemoved
 from aboa.engine.query import Query
 
 
@@ -221,6 +221,51 @@ class TestDatamodel(unittest.TestCase):
             "message": "processor failed",
             "file_uuid": "",
         }
+
+    def test_file_to_be_removed_jsonify(self):
+        """
+        Serialize a trash-queue row awaiting final physical removal.
+        """
+        query = Query()
+        file_uuid = uuid.uuid4()
+        file_to_remove_uuid = uuid.uuid4()
+        removal_date = datetime.datetime(2026, 7, 4, 10, 0, 0)
+        archived_file = ArchivedFile(
+            file_uuid,
+            "sample.txt",
+            "/tmp/archive/texts/2026/07/02/sample.txt",
+            datetime.datetime(2026, 7, 2, 10, 0, 0),
+            datetime.datetime(2026, 7, 2, 10, 1, 0),
+            10,
+            self.root_directory,
+        )
+        file_to_be_removed = FileToBeRemoved(
+            file_to_remove_uuid,
+            archived_file,
+            "/tmp/archive/trash/2026/07/04/{}/sample.txt".format(file_uuid),
+            self.root_directory,
+            removal_date,
+        )
+
+        try:
+            query.session.add(self.root_directory)
+            query.session.add(archived_file)
+            query.session.add(file_to_be_removed)
+            query.session.commit()
+
+            structure = file_to_be_removed.jsonify()
+
+            assert structure == {
+                "file_to_remove_uuid": str(file_to_remove_uuid),
+                "file_uuid": str(file_uuid),
+                "path": "/tmp/archive/trash/2026/07/04/{}/sample.txt".format(file_uuid),
+                "root_directory_uuid": str(self.root_directory.root_directory_uuid),
+                "removal_date": "2026-07-04T10:00:00",
+            }
+            assert str(archived_file.filesToBeRemoved[0].file_to_remove_uuid) == str(file_to_remove_uuid)
+            assert str(archived_file.filesToBeRemoved[0].file_uuid) == str(file_uuid)
+        finally:
+            query.close_session()
 
     def test_retrieve_archive_operation_can_be_persisted_without_archived_file(self):
         """

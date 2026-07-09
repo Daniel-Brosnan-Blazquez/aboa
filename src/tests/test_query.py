@@ -190,3 +190,30 @@ class TestQuery(unittest.TestCase):
         assert "retrieve" in grouped
         assert "delete" in grouped
         assert last[0].operation == "delete"
+
+    def test_query_files_to_be_removed_filters_selection_grouping_and_pagination(self):
+        """
+        Query trash-queue rows using the public query facade.
+        """
+        input_file = self.input_file("query_operation.txt")
+        self.engine.archive_file(str(input_file), metadata={"file_type": "text"})
+        archived_file = self.engine.query.get_archived_files(names={"filter": "query_operation.txt", "op": "like"})[0]
+        self.engine.delete_files(file_uuids=[archived_file.file_uuid], physical_delete=True)
+        queued = self.engine.query.get_files_to_be_removed()[0]
+
+        query = Query(session=self.engine.session)
+        rows = query.get_files_to_be_removed(
+            file_to_remove_uuids={"filter": [queued.file_to_remove_uuid], "op": "in"},
+            paths={"filter": "%trash%", "op": "like"},
+            root_directory_uuids={"filter": [queued.root_directory_uuid], "op": "in"},
+            removal_date_filters=[{"date": queued.removal_date.isoformat(), "op": "<="}],
+            order_by={"field": "file_to_remove_uuid", "descending": False},
+            limit=1,
+        )
+        grouped = query.get_files_to_be_removed(group_by="root_directory_uuid")
+        last = query.get_files_to_be_removed(selection="last", order_by={"field": "path", "descending": False})
+
+        assert len(rows) == 1
+        assert rows[0].file_uuid == archived_file.file_uuid
+        assert queued.root_directory_uuid in grouped
+        assert last[0].file_uuid == queued.file_uuid

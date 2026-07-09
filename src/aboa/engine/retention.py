@@ -7,7 +7,7 @@ module aboa
 import datetime
 import os
 
-from aboa.datamodel.archived_files import ArchivedFile
+from aboa.datamodel.archived_files import ArchivedFile, FileToBeRemoved
 
 
 RETENTION_REMOVAL_JUSTIFICATION = "retention_policy"
@@ -39,8 +39,7 @@ def apply_retention(engine, dry_run=False):
             archived_file.available = False
             archived_file.removal_date = now
             archived_file.removal_justification = RETENTION_REMOVAL_JUSTIFICATION
-            if os.path.exists(archived_file.path):
-                os.unlink(archived_file.path)
+            engine.move_archived_file_to_trash(archived_file, now)
 
         engine.session.commit()
         return candidates
@@ -51,6 +50,46 @@ def apply_retention(engine, dry_run=False):
             message = exit_code["message"].format(exc)
             engine.record_failure("retention", exit_code["status"], message)
             engine.session.commit()
+        raise
+
+
+def apply_final_removal(engine, dry_run=False, now=None):
+    """
+    Delete trash-queue payloads whose 30-day grace period has elapsed.
+
+    Per-file deletion failures are persisted in ``archive_operations`` and the
+    corresponding trash-queue row is left in place for a later retry.
+
+    :param engine: archive engine owning the session
+    :type engine: aboa.engine.engine.Engine
+    :param dry_run: return candidates without deleting payloads or rows
+    :type dry_run: bool
+    :param now: evaluation timestamp, defaulting to current UTC time
+    :type now: datetime.datetime or None
+
+    :return: candidate or affected pending-removal rows
+    :rtype: list
+    """
+    now = now or datetime.datetime.utcnow()
+    candidates = get_files_ready_for_final_removal(engine.session, now)
+    if dry_run:
+        return candidates
+
+    try:
+        for file_to_be_removed in candidates:
+            try:
+                if os.path.exists(file_to_be_removed.path):
+                    os.unlink(file_to_be_removed.path)
+                engine.session.delete(file_to_be_removed)
+            except Exception as exc:
+                if hasattr(engine, "get_exit_code") and hasattr(engine, "record_failure"):
+                    exit_code = engine.get_exit_code("FINAL_REMOVAL_FAILED")
+                    message = exit_code["message"].format(file_to_be_removed.path, exc)
+                    engine.record_failure("final_removal", exit_code["status"], message, file_to_be_removed.archivedFile)
+        engine.session.commit()
+        return candidates
+    except Exception:
+        engine.session.rollback()
         raise
 
 
@@ -75,6 +114,30 @@ def get_expired_files(session, now=None):
             ArchivedFile.expiration_date.asc(),
             ArchivedFile.archive_date.asc(),
             ArchivedFile.file_uuid.asc(),
+        )
+        .all()
+    )
+
+
+def get_files_ready_for_final_removal(session, now=None):
+    """
+    Return trash-queue rows whose scheduled final-removal time has arrived.
+
+    :param session: SQLAlchemy session
+    :type session: sqlalchemy.orm.session.Session
+    :param now: evaluation timestamp, defaulting to current UTC time
+    :type now: datetime.datetime or None
+
+    :return: pending-removal rows ready for final deletion
+    :rtype: list
+    """
+    now = now or datetime.datetime.utcnow()
+    return (
+        session.query(FileToBeRemoved)
+        .filter(FileToBeRemoved.removal_date <= now)
+        .order_by(
+            FileToBeRemoved.removal_date.asc(),
+            FileToBeRemoved.file_to_remove_uuid.asc(),
         )
         .all()
     )

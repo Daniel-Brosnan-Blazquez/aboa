@@ -135,6 +135,34 @@ REFERENCES aboa.archived_files (file_uuid) MATCH FULL
 ON DELETE SET NULL ON UPDATE CASCADE;
 -- ddl-end --
 
+-- object: aboa.files_to_be_removed | type: TABLE --
+-- DROP TABLE IF EXISTS aboa.files_to_be_removed CASCADE;
+CREATE TABLE aboa.files_to_be_removed (
+	file_uuid uuid NOT NULL,
+	file_to_remove_uuid uuid NOT NULL,
+	root_directory_uuid uuid NOT NULL,
+	path text NOT NULL,
+	removal_date timestamp NOT NULL,
+	CONSTRAINT files_to_be_removed_pk PRIMARY KEY (file_to_remove_uuid)
+);
+-- ddl-end --
+ALTER TABLE aboa.files_to_be_removed OWNER TO aboa;
+-- ddl-end --
+
+-- object: files_to_be_removed_archived_files_fk | type: CONSTRAINT --
+-- ALTER TABLE aboa.files_to_be_removed DROP CONSTRAINT IF EXISTS files_to_be_removed_archived_files_fk CASCADE;
+ALTER TABLE aboa.files_to_be_removed ADD CONSTRAINT files_to_be_removed_archived_files_fk FOREIGN KEY (file_uuid)
+REFERENCES aboa.archived_files (file_uuid) MATCH FULL
+ON DELETE CASCADE ON UPDATE CASCADE;
+-- ddl-end --
+
+-- object: files_to_be_removed_archive_root_directories_fk | type: CONSTRAINT --
+-- ALTER TABLE aboa.files_to_be_removed DROP CONSTRAINT IF EXISTS files_to_be_removed_archive_root_directories_fk CASCADE;
+ALTER TABLE aboa.files_to_be_removed ADD CONSTRAINT files_to_be_removed_archive_root_directories_fk FOREIGN KEY (root_directory_uuid)
+REFERENCES aboa.archive_root_directories (root_directory_uuid) MATCH FULL
+ON DELETE RESTRICT ON UPDATE CASCADE;
+-- ddl-end --
+
 -- object: idx_archived_files_name | type: INDEX --
 -- DROP INDEX IF EXISTS aboa.idx_archived_files_name CASCADE;
 CREATE INDEX idx_archived_files_name ON aboa.archived_files
@@ -276,6 +304,33 @@ CREATE INDEX idx_archived_files_delete_archive_configuration_uuid ON aboa.archiv
 USING btree
 (
 	delete_archive_configuration_uuid
+);
+-- ddl-end --
+
+-- object: idx_files_to_be_removed_path | type: INDEX --
+-- DROP INDEX IF EXISTS aboa.idx_files_to_be_removed_path CASCADE;
+CREATE INDEX idx_files_to_be_removed_path ON aboa.files_to_be_removed
+USING btree
+(
+	path
+);
+-- ddl-end --
+
+-- object: idx_files_to_be_removed_root_directory_uuid | type: INDEX --
+-- DROP INDEX IF EXISTS aboa.idx_files_to_be_removed_root_directory_uuid CASCADE;
+CREATE INDEX idx_files_to_be_removed_root_directory_uuid ON aboa.files_to_be_removed
+USING btree
+(
+	root_directory_uuid
+);
+-- ddl-end --
+
+-- object: idx_files_to_be_removed_removal_date | type: INDEX --
+-- DROP INDEX IF EXISTS aboa.idx_files_to_be_removed_removal_date CASCADE;
+CREATE INDEX idx_files_to_be_removed_removal_date ON aboa.files_to_be_removed
+USING btree
+(
+	removal_date
 );
 -- ddl-end --
 

@@ -11,7 +11,8 @@ from pathlib import Path
 
 from aboa.engine.engine import Engine
 from aboa.engine.query import Query
-from aboa.engine.retention import RETENTION_REMOVAL_JUSTIFICATION, apply_retention
+from aboa.engine import retention as retention_module
+from aboa.engine.retention import RETENTION_REMOVAL_JUSTIFICATION, apply_final_removal, apply_retention
 
 
 class TestRetention(unittest.TestCase):
@@ -93,6 +94,7 @@ class TestRetention(unittest.TestCase):
 
         dry_run = apply_retention(self.engine, dry_run=True)
         executed = apply_retention(self.engine, dry_run=False)
+        queued = self.engine.query.get_files_to_be_removed(file_uuids={"filter": [archived_file.file_uuid], "op": "in"})
 
         assert len(dry_run) == 1
         assert len(executed) == 1
@@ -102,3 +104,62 @@ class TestRetention(unittest.TestCase):
         assert executed[0].deleteArchiveConfiguration.path == self.configuration_file
         assert executed[0].removal_justification == RETENTION_REMOVAL_JUSTIFICATION
         assert not os.path.exists(executed[0].path)
+        assert len(queued) == 1
+        assert queued[0].removal_date == executed[0].removal_date + datetime.timedelta(days=30)
+        assert os.path.exists(queued[0].path)
+        assert "trash" in queued[0].path.split(os.sep)
+
+    def test_final_removal_deletes_eligible_trash_rows(self):
+        """
+        Permanently delete trash payloads after the 30-day grace period.
+        """
+        input_file = self.make_file("sample.txt")
+        assert self.engine.archive_file(str(input_file), metadata={"file_type": "text", "expiration_date": datetime.datetime.utcnow() - datetime.timedelta(days=1)}) is None
+        apply_retention(self.engine, dry_run=False)
+        queued = self.engine.query.get_files_to_be_removed()[0]
+        queued.removal_date = datetime.datetime.utcnow() - datetime.timedelta(days=1)
+        trash_path = queued.path
+        self.engine.session.commit()
+
+        removed = apply_final_removal(self.engine)
+        remaining = self.engine.query.get_files_to_be_removed()
+
+        assert len(removed) == 1
+        assert removed[0].file_uuid == queued.file_uuid
+        assert not os.path.exists(trash_path)
+        assert remaining == []
+
+    def test_final_removal_failure_is_registered_for_retry(self):
+        """
+        Register final-removal failures and keep the queue row for retry.
+        """
+        input_file = self.make_file("sample.txt")
+        assert self.engine.archive_file(str(input_file), metadata={"file_type": "text", "expiration_date": datetime.datetime.utcnow() - datetime.timedelta(days=1)}) is None
+        apply_retention(self.engine, dry_run=False)
+        queued = self.engine.query.get_files_to_be_removed()[0]
+        queued.removal_date = datetime.datetime.utcnow() - datetime.timedelta(days=1)
+        trash_path = queued.path
+        self.engine.session.commit()
+        original_unlink = retention_module.os.unlink
+
+        def fail_unlink(path):
+            if path == trash_path:
+                raise OSError("permission denied")
+            return original_unlink(path)
+
+        try:
+            retention_module.os.unlink = fail_unlink
+            removed = apply_final_removal(self.engine)
+        finally:
+            retention_module.os.unlink = original_unlink
+        remaining = self.engine.query.get_files_to_be_removed()
+        operations = self.engine.query.get_archive_operations(operations={"filter": "final_removal", "op": "like"})
+
+        assert len(removed) == 1
+        assert len(remaining) == 1
+        assert remaining[0].path == trash_path
+        assert os.path.exists(trash_path)
+        assert len(operations) == 1
+        assert operations[0].status == 12
+        assert operations[0].file_uuid == queued.file_uuid
+        assert "permission denied" in operations[0].message

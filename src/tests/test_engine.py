@@ -9,7 +9,7 @@ import sys
 import unittest
 from pathlib import Path
 
-from aboa.datamodel.archived_files import ArchiveConfiguration, ArchivedFile, ArchiveOperation, ArchiveRootDirectory
+from aboa.datamodel.archived_files import ArchiveConfiguration, ArchivedFile, ArchiveOperation, ArchiveRootDirectory, FileToBeRemoved
 from aboa.engine.engine import Engine
 from aboa.engine.errors import ArchiveConfigurationError, ArchiveDeletionError, ArchiveFileError, ArchiveRetrievalError
 from aboa.engine.query import Query
@@ -324,18 +324,27 @@ class TestEngine(unittest.TestCase):
 
     def test_delete_logical_and_physical(self):
         """
-        Mark an archived file unavailable and remove its physical payload.
+        Mark an archived file unavailable and move its physical payload to trash.
         """
         input_file = self.input_file("sample.txt")
         archived_file = self.archive_and_get(input_file)
 
         deleted = self.engine.delete_files(file_uuids=[archived_file.file_uuid], physical_delete=True)
+        queued = self.engine.query.get_files_to_be_removed(file_uuids={"filter": [archived_file.file_uuid], "op": "in"})
 
         assert deleted[0].available is False
         assert deleted[0].removal_date is not None
         assert deleted[0].removal_justification == "manual_delete"
         assert deleted[0].delete_archive_configuration_uuid is None
         assert not os.path.exists(deleted[0].path)
+        assert len(queued) == 1
+        assert isinstance(queued[0], FileToBeRemoved)
+        assert queued[0].file_to_remove_uuid is not None
+        assert queued[0].file_uuid == deleted[0].file_uuid
+        assert queued[0].root_directory_uuid == deleted[0].root_directory_uuid
+        assert queued[0].removal_date == deleted[0].removal_date + datetime.timedelta(days=30)
+        assert os.path.exists(queued[0].path)
+        assert "trash" in queued[0].path.split(os.sep)
 
     def test_delete_files_raises_archive_deletion_error_on_failure(self):
         """

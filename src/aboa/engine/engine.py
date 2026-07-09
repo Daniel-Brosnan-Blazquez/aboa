@@ -20,6 +20,7 @@ from aboa.datamodel.archived_files import (
     ArchivedFile,
     ArchiveOperation,
     ArchiveRootDirectory,
+    FileToBeRemoved,
 )
 from aboa.datamodel.base import Base, Session, engine as sqlalchemy_engine
 from aboa.engine.errors import ArchiveConfigurationError, ArchiveDeletionError, ArchiveFileError, ArchiveRetrievalError, ProcessorError
@@ -93,7 +94,14 @@ exit_codes = {
         "status": 11,
         "message": "The archive operation for file {} ended unexpectedly with the error: {}",
     },
+    "FINAL_REMOVAL_FAILED": {
+        "status": 12,
+        "message": "The final removal operation for file {} ended unexpectedly with the error: {}",
+    },
 }
+
+TRASH_DIRECTORY_NAME = "trash"
+FINAL_REMOVAL_DELAY_DAYS = 30
 
 
 class Engine():
@@ -362,13 +370,13 @@ class Engine():
 
     def delete_files(self, filters=None, file_uuids=None, physical_delete=False, removal_justification="manual_delete"):
         """
-        Delete archived files logically and optionally remove physical payloads.
+        Delete archived files logically and optionally move payloads to trash.
 
         :param filters: query filters accepted by ``Query.get_archived_files``
         :type filters: dict or None
         :param file_uuids: optional list of file UUIDs to delete
         :type file_uuids: list or None
-        :param physical_delete: remove files from the POSIX archive when true
+        :param physical_delete: move files from the POSIX archive to trash when true
         :type physical_delete: bool
         :param removal_justification: reason stored on logically removed files
         :type removal_justification: str or None
@@ -392,8 +400,8 @@ class Engine():
                 archived_file.removal_date = now
                 archived_file.removal_justification = removal_justification
                 archived_file.deleteArchiveConfiguration = None
-                if physical_delete and os.path.exists(archived_file.path):
-                    os.unlink(archived_file.path)
+                if physical_delete:
+                    self.move_archived_file_to_trash(archived_file, now)
             self.session.commit()
             logger.info("Delete request performed on {} file/s".format(len(files)))
             return files
@@ -802,6 +810,79 @@ class Engine():
         # existing archived payload on disk.
         base, extension = os.path.splitext(file_name)
         return os.path.join(directory, "{}_{}{}".format(base, uuid.uuid4(), extension))
+
+    def move_archived_file_to_trash(self, archived_file, removal_date=None):
+        """
+        Move an archived payload to trash and queue it for final removal.
+
+        :param archived_file: archived-file inventory row to move
+        :type archived_file: aboa.datamodel.archived_files.ArchivedFile
+        :param removal_date: logical removal timestamp used to schedule final removal
+        :type removal_date: datetime.datetime or None
+
+        :return: pending final-removal row, or None when no payload exists
+        :rtype: aboa.datamodel.archived_files.FileToBeRemoved or None
+        """
+        if not os.path.exists(archived_file.path):
+            return self._get_file_to_be_removed(archived_file)
+
+        removal_date = removal_date or datetime.datetime.utcnow()
+        final_removal_date = removal_date + datetime.timedelta(days=FINAL_REMOVAL_DELAY_DAYS)
+        root_directory = archived_file.rootDirectory
+        if root_directory is None:
+            root_directory = self.session.query(ArchiveRootDirectory).filter(
+                ArchiveRootDirectory.root_directory_uuid == archived_file.root_directory_uuid
+            ).first()
+        trash_path = self._build_trash_path(root_directory.path, removal_date, archived_file)
+        shutil.move(archived_file.path, trash_path)
+
+        file_to_be_removed = self._get_file_to_be_removed(archived_file)
+        if file_to_be_removed is None:
+            file_to_be_removed = FileToBeRemoved(uuid.uuid4(), archived_file, trash_path, root_directory, final_removal_date)
+            self.session.add(file_to_be_removed)
+        else:
+            file_to_be_removed.path = trash_path
+            file_to_be_removed.rootDirectory = root_directory
+            file_to_be_removed.removal_date = final_removal_date
+        return file_to_be_removed
+
+    def _get_file_to_be_removed(self, archived_file):
+        """
+        Return the pending final-removal row for an archived file, if present.
+        """
+        return (
+            self.session.query(FileToBeRemoved)
+            .filter(FileToBeRemoved.file_uuid == archived_file.file_uuid)
+            .order_by(FileToBeRemoved.removal_date.desc())
+            .first()
+        )
+
+    def _build_trash_path(self, root_directory, removal_date, archived_file):
+        """
+        Build a collision-safe trash path for an archived payload.
+
+        :param root_directory: archive root directory path
+        :type root_directory: str
+        :param removal_date: timestamp when the file is moved to trash
+        :type removal_date: datetime.datetime
+        :param archived_file: archived-file inventory row being moved
+        :type archived_file: aboa.datamodel.archived_files.ArchivedFile
+
+        :return: trash destination path
+        :rtype: str
+        """
+        directory = os.path.join(
+            root_directory,
+            TRASH_DIRECTORY_NAME,
+            removal_date.strftime("%Y"),
+            removal_date.strftime("%m"),
+            removal_date.strftime("%d"),
+        )
+        os.makedirs(directory, exist_ok=True)
+        trash_name = os.path.basename(archived_file.path)
+        trash_path = os.path.join(directory, trash_name)
+
+        return trash_path
 
     def _store_file(self, source_path, destination_path):
         """

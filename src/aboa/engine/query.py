@@ -13,6 +13,7 @@ from aboa.datamodel.archived_files import (
     ArchivedFile,
     ArchiveOperation,
     ArchiveRootDirectory,
+    FileToBeRemoved,
 )
 from aboa.datamodel.base import Base, Session, engine
 from aboa.engine import functions
@@ -125,6 +126,22 @@ class Query():
         "status": ArchiveOperation.status,
         "message": ArchiveOperation.message,
         "file_uuid": ArchiveOperation.file_uuid,
+    }
+    files_to_be_removed_text_fields = {
+        "file_to_remove_uuids": FileToBeRemoved.file_to_remove_uuid,
+        "file_uuids": FileToBeRemoved.file_uuid,
+        "paths": FileToBeRemoved.path,
+        "root_directory_uuids": FileToBeRemoved.root_directory_uuid,
+    }
+    files_to_be_removed_date_fields = {
+        "removal_date_filters": FileToBeRemoved.removal_date,
+    }
+    files_to_be_removed_order_fields = {
+        "file_to_remove_uuid": FileToBeRemoved.file_to_remove_uuid,
+        "file_uuid": FileToBeRemoved.file_uuid,
+        "path": FileToBeRemoved.path,
+        "root_directory_uuid": FileToBeRemoved.root_directory_uuid,
+        "removal_date": FileToBeRemoved.removal_date,
     }
 
     def __init__(self, session=None):
@@ -429,6 +446,59 @@ class Query():
             query,
             self.archive_operation_order_fields,
             ArchiveOperation.time_stamp.desc(),
+            group_by=group_by,
+            order_by=order_by,
+            selection=selection,
+            limit=limit,
+            offset=offset,
+        )
+
+    def get_files_to_be_removed(self, file_to_remove_uuids=None,
+                                file_uuids=None, paths=None,
+                                root_directory_uuids=None,
+                                removal_date_filters=None, order_by=None,
+                                group_by=None, selection="all", limit=None,
+                                offset=None):
+        """
+        Query trash-queue rows waiting for final physical deletion.
+
+        :param file_to_remove_uuids: pending-removal UUID text filter
+        :param file_uuids: archived-file UUID text filter
+        :param paths: trash path text filter
+        :param root_directory_uuids: root-directory UUID text filter
+        :param removal_date_filters: scheduled final-removal timestamp filters
+        :param order_by: ordering descriptor with field and descending keys
+        :param group_by: field used to group complete entity results
+        :param selection: selection rule: all, first, or last
+        :param limit: maximum number of rows
+        :param offset: result offset
+
+        :return: list of pending final-removal rows, or grouped dictionary
+        :rtype: list or dict
+
+        :raises InputError: when filters, ordering, grouping, or selection are invalid
+        """
+        params = []
+        values = locals()
+
+        for argument_name, column in self.files_to_be_removed_text_fields.items():
+            value = values[argument_name]
+            if value is not None:
+                functions.is_valid_text_filter(value)
+                params.append(self._build_text_filter(column, value))
+
+        for argument_name, column in self.files_to_be_removed_date_fields.items():
+            value = values[argument_name]
+            if value is not None:
+                functions.is_valid_date_filters(value)
+                for date_filter in value:
+                    params.append(arithmetic_operators[date_filter["op"]](column, functions.parse_datetime(date_filter["date"])))
+
+        query = self.session.query(FileToBeRemoved).filter(*params)
+        return self._finish_query(
+            query,
+            self.files_to_be_removed_order_fields,
+            FileToBeRemoved.removal_date.desc(),
             group_by=group_by,
             order_by=order_by,
             selection=selection,

@@ -268,6 +268,61 @@ class ArchivedFile(Base):
         }
 
 
+class FileToBeRemoved(Base):
+    """
+    Trash-queue row for an archived file awaiting final physical removal.
+
+    Physical removals first move archive payloads to a trash directory. This row
+    records the trash path and the scheduled final deletion timestamp.
+    """
+
+    __tablename__ = "files_to_be_removed"
+
+    file_uuid = Column(Text, ForeignKey("archived_files.file_uuid"), nullable=False)
+    file_to_remove_uuid = Column(Text, primary_key=True)
+    root_directory_uuid = Column(Text, ForeignKey("archive_root_directories.root_directory_uuid"), nullable=False)
+    path = Column(Text, index=True, nullable=False)
+    removal_date = Column(DateTime, index=True, nullable=False)
+    archivedFile = relationship("ArchivedFile", backref="filesToBeRemoved")
+    rootDirectory = relationship("ArchiveRootDirectory", backref="files_to_be_removed")
+
+    def __init__(self, file_to_remove_uuid, archived_file, path, root_directory, removal_date):
+        """
+        Build a pending final-removal row.
+
+        :param file_to_remove_uuid: pending-removal UUID
+        :type file_to_remove_uuid: uuid.UUID or str
+        :param archived_file: archived-file inventory row being removed
+        :type archived_file: aboa.datamodel.archived_files.ArchivedFile
+        :param path: payload path inside the trash directory
+        :type path: str
+        :param root_directory: root-directory history row that owns the trash path
+        :type root_directory: aboa.datamodel.archived_files.ArchiveRootDirectory
+        :param removal_date: scheduled final-removal timestamp
+        :type removal_date: datetime.datetime
+        """
+        self.file_to_remove_uuid = str(file_to_remove_uuid)
+        self.archivedFile = archived_file
+        self.path = path
+        self.rootDirectory = root_directory
+        self.removal_date = removal_date
+
+    def jsonify(self):
+        """
+        Serialize the pending final-removal row.
+
+        :return: JSON-ready dictionary
+        :rtype: dict
+        """
+        return {
+            "file_to_remove_uuid": str(self.file_to_remove_uuid),
+            "file_uuid": str(self.file_uuid),
+            "path": self.path,
+            "root_directory_uuid": str(self.root_directory_uuid),
+            "removal_date": _isoformat(self.removal_date),
+        }
+
+
 class ArchiveOperation(Base):
     """
     Failure trace for archive operations.
