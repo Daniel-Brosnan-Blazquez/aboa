@@ -492,7 +492,10 @@ class Engine():
                 return candidate
             counter += 1
 
-    def delete_files(self, filters=None, file_uuids=None, physical_delete=False, permanent_delete=False, removal_justification="manual_delete"):
+    def delete_files(
+            self, filters=None, file_uuids=None, physical_delete=False,
+            permanent_delete=False, purge_entries=False,
+            removal_justification="manual_delete"):
         """
         Delete archived files logically and optionally remove their payloads.
 
@@ -504,6 +507,8 @@ class Engine():
         :type physical_delete: bool
         :param permanent_delete: delete physical payloads immediately, bypassing trash
         :type permanent_delete: bool
+        :param purge_entries: remove archived-file rows after permanent deletion
+        :type purge_entries: bool
         :param removal_justification: reason stored on logically removed files
         :type removal_justification: str or None
 
@@ -514,6 +519,9 @@ class Engine():
             deletion fails
         """
         try:
+            if purge_entries and physical_delete and not permanent_delete:
+                raise ArchiveDeletionError("Archived-file entries cannot be purged while moving payloads to trash")
+
             filters = dict(filters or {})
             if file_uuids is not None:
                 filters["file_uuids"] = {"filter": file_uuids, "op": "in"}
@@ -534,6 +542,8 @@ class Engine():
                     self.move_archived_file_to_trash(archived_file, archived_file.removal_date)
                 else:
                     self._sync_physical_availability(archived_file)
+                if purge_entries:
+                    self._delete_archived_file_entry(archived_file)
             self.session.commit()
             logger.info("Delete request performed on {} file/s".format(len(files)))
             return files
@@ -566,16 +576,7 @@ class Engine():
                 filters["file_uuids"] = {"filter": file_uuids, "op": "in"}
             files = self.query.get_archived_files(**filters)
             for archived_file in files:
-                if self._sync_physical_availability(archived_file):
-                    raise ArchiveDeletionError(
-                        "The archived-file entry {} cannot be deleted because its payload is still physically available".format(
-                            archived_file.file_uuid
-                        )
-                    )
-                self._delete_associated_archive_operations(archived_file)
-                for file_to_be_removed in self._get_files_to_be_removed(archived_file):
-                    self.session.delete(file_to_be_removed)
-                self.session.delete(archived_file)
+                self._delete_archived_file_entry(archived_file)
             self.session.commit()
             logger.info("Archived-file entry deletion request performed on {} file/s".format(len(files)))
             return files
@@ -1207,6 +1208,21 @@ class Engine():
             )
         archived_file.physically_available = physically_available
         return physically_available
+
+    def _delete_archived_file_entry(self, archived_file):
+        """
+        Delete an archived-file inventory row after confirming no payload remains.
+        """
+        if self._sync_physical_availability(archived_file):
+            raise ArchiveDeletionError(
+                "The archived-file entry {} cannot be deleted because its payload is still physically available".format(
+                    archived_file.file_uuid
+                )
+            )
+        self._delete_associated_archive_operations(archived_file)
+        for file_to_be_removed in self._get_files_to_be_removed(archived_file):
+            self.session.delete(file_to_be_removed)
+        self.session.delete(archived_file)
 
     def _delete_associated_archive_operations(self, archived_file):
         """

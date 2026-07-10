@@ -593,7 +593,7 @@ def aboa_delete():
         "--purge-entry",
         action="store_true",
         dest="purge_entry",
-        help="delete matching archived-file rows only when their payloads are gone",
+        help="delete matching archived-file rows; combine with --permanent to remove payloads first",
     )
     parser.add_argument(
         "-e",
@@ -613,6 +613,8 @@ def aboa_delete():
     filters = _build_archived_file_filters(args, parser)
     if args.physical and args.permanent_delete:
         parser.error("--physical and --permanent cannot be used together")
+    if args.physical and args.purge_entry:
+        parser.error("--physical and --purge-entry cannot be used together; use --permanent --purge-entry")
     if not filters and not args.list_files:
         parser.error("at least one archived-file filter is required")
     logger.info("Delete command received with filters {}".format(filters))
@@ -625,13 +627,14 @@ def aboa_delete():
             logger.info("Delete command listed {} candidate file/s".format(len(files)))
             return
 
-        if args.purge_entry:
+        if args.purge_entry and not args.permanent_delete:
             files = engine.delete_archived_file_entries(filters=filters)
         else:
             files = engine.delete_files(
                 filters=filters,
                 physical_delete=args.physical,
                 permanent_delete=args.permanent_delete,
+                purge_entries=args.purge_entry,
                 removal_justification=args.removal_reason,
             )
         _print_json(_jsonify_rows(files))

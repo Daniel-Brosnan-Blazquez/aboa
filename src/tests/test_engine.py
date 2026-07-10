@@ -406,6 +406,33 @@ class TestEngine(unittest.TestCase):
         assert not os.path.exists(archive_path)
         assert queued == []
 
+    def test_delete_permanently_can_purge_inventory_in_same_request(self):
+        """
+        Permanent deletion can remove payload, inventory, and operations together.
+        """
+        input_file = self.input_file("sample.txt")
+        archived_file = self.archive_and_get(input_file)
+        file_uuid = archived_file.file_uuid
+        archive_path = archived_file.path
+        self.engine.record_failure("archive", 5, "duplicate reception", archived_file)
+        self.engine.session.commit()
+
+        deleted = self.engine.delete_files(
+            file_uuids=[file_uuid],
+            permanent_delete=True,
+            purge_entries=True,
+        )
+        remaining = self.engine.query.get_archived_files(file_uuids={"filter": [file_uuid], "op": "in"})
+        queued = self.engine.query.get_files_to_be_removed(file_uuids={"filter": [file_uuid], "op": "in"})
+        remaining_operations = self.engine.query.get_archive_operations(file_uuids={"filter": [file_uuid], "op": "in"})
+
+        assert len(deleted) == 1
+        assert deleted[0].file_uuid == file_uuid
+        assert not os.path.exists(archive_path)
+        assert remaining == []
+        assert queued == []
+        assert remaining_operations == []
+
     def test_delete_archived_file_entry_requires_no_physical_payload(self):
         """
         Purge archived_files rows only after the managed payload has gone.
