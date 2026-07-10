@@ -905,7 +905,7 @@ class Engine():
     def _build_archived_file(
             self, file_path, archive_path, reception_date, archive_date,
             metadata, checksum, root_directory, archive_configuration=None,
-            available=True, physical_available=True):
+            available=True, physically_available=True):
         """
         Build an archived-file row with the common metadata mapping.
 
@@ -927,8 +927,8 @@ class Engine():
         :type archive_configuration: aboa.datamodel.archived_files.ArchiveConfiguration or None
         :param available: logical availability flag
         :type available: bool
-        :param physical_available: whether the recorded payload exists physically
-        :type physical_available: bool
+        :param physically_available: whether the recorded payload exists physically
+        :type physically_available: bool
 
         :return: archived-file inventory entity
         :rtype: aboa.datamodel.archived_files.ArchivedFile
@@ -947,7 +947,7 @@ class Engine():
             archive_configuration=archive_configuration,
             delete_archive_configuration=delete_archive_configuration,
             available=available,
-            physical_available=physical_available,
+            physically_available=physically_available,
             file_group=metadata.get("file_group"),
             file_type=metadata.get("file_type"),
             file_class=metadata.get("file_class"),
@@ -1000,7 +1000,7 @@ class Engine():
                 root_directory,
                 archive_configuration,
                 available=False,
-                physical_available=os.path.exists(archive_path),
+                physically_available=os.path.exists(archive_path),
             )
             self.session.add(archived_file)
 
@@ -1085,7 +1085,7 @@ class Engine():
             self.session.query(ArchivedFile)
             .filter(ArchivedFile.name == file_name)
             .filter(ArchivedFile.checksum == checksum)
-            .filter(ArchivedFile.physical_available == True)
+            .filter(ArchivedFile.physically_available == True)
             .order_by(ArchivedFile.archive_date.asc())
             .all()
         )
@@ -1093,7 +1093,7 @@ class Engine():
             if not candidate.path.startswith(error_directory + os.sep):
                 continue
             if not os.path.exists(candidate.path):
-                candidate.physical_available = False
+                candidate.physically_available = False
                 continue
             try:
                 if self._checksum(candidate.path) == checksum:
@@ -1131,7 +1131,7 @@ class Engine():
         """
         if not os.path.exists(archived_file.path):
             file_to_be_removed = self._get_file_to_be_removed(archived_file)
-            archived_file.physical_available = (
+            archived_file.physically_available = (
                 file_to_be_removed is not None
                 and os.path.exists(file_to_be_removed.path)
             )
@@ -1155,7 +1155,7 @@ class Engine():
             file_to_be_removed.path = trash_path
             file_to_be_removed.rootDirectory = root_directory
             file_to_be_removed.removal_date = final_removal_date
-        archived_file.physical_available = True
+        archived_file.physically_available = True
         return file_to_be_removed
 
     def delete_archived_file_permanently(self, archived_file):
@@ -1183,7 +1183,7 @@ class Engine():
                 deleted_payload = True
             self.session.delete(file_to_be_removed)
 
-        archived_file.physical_available = False
+        archived_file.physically_available = False
         return deleted_payload
 
     def _get_file_to_be_removed(self, archived_file):
@@ -1212,14 +1212,14 @@ class Engine():
         """
         Refresh whether a managed payload exists in the archive path or trash.
         """
-        physical_available = os.path.exists(archived_file.path)
-        if not physical_available:
-            physical_available = any(
+        physically_available = os.path.exists(archived_file.path)
+        if not physically_available:
+            physically_available = any(
                 os.path.exists(file_to_be_removed.path)
                 for file_to_be_removed in self._get_files_to_be_removed(archived_file)
             )
-        archived_file.physical_available = physical_available
-        return physical_available
+        archived_file.physically_available = physically_available
+        return physically_available
 
     def _detach_archive_operations(self, archived_file):
         """
@@ -1292,7 +1292,7 @@ class Engine():
         shutil.move(file_to_be_removed.path, archived_file.path)
 
         archived_file.available = True
-        archived_file.physical_available = True
+        archived_file.physically_available = True
         archived_file.removal_date = None
         archived_file.removal_justification = None
         archived_file.file_size = os.path.getsize(archived_file.path)

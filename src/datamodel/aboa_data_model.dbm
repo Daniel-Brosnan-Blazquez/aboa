@@ -103,7 +103,7 @@ CAUTION: Do not modify this file unless you know what you are doing.
 	<column name="available" not-null="true">
 		<type name="bool" length="0"/>
 	</column>
-	<column name="physical_available" not-null="true">
+	<column name="physically_available" not-null="true">
 		<type name="bool" length="0"/>
 	</column>
 	<column name="last_access_date">
@@ -369,11 +369,11 @@ CAUTION: Do not modify this file unless you know what you are doing.
 		</idxelement>
 </index>
 
-<index name="idx_archived_files_physical_available" table="aboa.archived_files"
+<index name="idx_archived_files_physically_available" table="aboa.archived_files"
 	 concurrent="false" unique="false" fast-update="false" buffering="false" nulls-not-distinct="false"
 	 index-type="btree" factor="0">
 		<idxelement use-sorting="false">
-			<column name="physical_available"/>
+			<column name="physically_available"/>
 		</idxelement>
 </index>
 

@@ -340,7 +340,7 @@ class TestEngine(unittest.TestCase):
         queued = self.engine.query.get_files_to_be_removed(file_uuids={"filter": [archived_file.file_uuid], "op": "in"})
 
         assert deleted[0].available is False
-        assert deleted[0].physical_available is True
+        assert deleted[0].physically_available is True
         assert deleted[0].removal_date is not None
         assert deleted[0].removal_justification == "manual_delete"
         assert deleted[0].delete_archive_configuration_uuid is None
@@ -368,7 +368,7 @@ class TestEngine(unittest.TestCase):
         second_queued = self.engine.query.get_files_to_be_removed(file_uuids={"filter": [archived_file.file_uuid], "op": "in"})
 
         assert second_delete.available is False
-        assert second_delete.physical_available is True
+        assert second_delete.physically_available is True
         assert second_delete.removal_date == first_removal_date
         assert len(second_queued) == 1
         assert second_queued[0].file_to_remove_uuid == first_queued.file_to_remove_uuid
@@ -387,7 +387,7 @@ class TestEngine(unittest.TestCase):
         queued = self.engine.query.get_files_to_be_removed(file_uuids={"filter": [archived_file.file_uuid], "op": "in"})
 
         assert deleted[0].available is False
-        assert deleted[0].physical_available is False
+        assert deleted[0].physically_available is False
         assert queued == []
 
     def test_delete_permanently_bypasses_trash(self):
@@ -402,7 +402,7 @@ class TestEngine(unittest.TestCase):
         queued = self.engine.query.get_files_to_be_removed(file_uuids={"filter": [archived_file.file_uuid], "op": "in"})
 
         assert deleted[0].available is False
-        assert deleted[0].physical_available is False
+        assert deleted[0].physically_available is False
         assert not os.path.exists(archive_path)
         assert queued == []
 
@@ -461,7 +461,7 @@ class TestEngine(unittest.TestCase):
         assert len(recovered) == 1
         assert recovered[0].file_uuid == archived_file.file_uuid
         assert recovered[0].available is True
-        assert recovered[0].physical_available is True
+        assert recovered[0].physically_available is True
         assert recovered[0].removal_date is None
         assert recovered[0].removal_justification is None
         assert recovered[0].path == archive_path

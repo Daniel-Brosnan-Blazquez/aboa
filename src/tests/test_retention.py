@@ -123,7 +123,7 @@ class TestRetention(unittest.TestCase):
 
         assert len(removed) == 1
         assert removed[0].file_uuid == queued.file_uuid
-        assert queued.archivedFile.physical_available is False
+        assert queued.archivedFile.physically_available is False
         assert not os.path.exists(trash_path)
         assert remaining == []
 

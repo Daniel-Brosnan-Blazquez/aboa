@@ -353,9 +353,9 @@ def _add_archived_file_filter_arguments(parser):
         help="availability filter; use VALUE or OP:VALUE",
     )
     parser.add_argument(
-        "--physical-available",
+        "--physically-available",
         type=_parse_bool_filter,
-        dest="physical_available_filter",
+        dest="physically_available_filter",
         metavar="FILTER",
         help="physical payload availability filter; use VALUE or OP:VALUE",
     )
@@ -374,8 +374,8 @@ def _build_archived_file_filters(args, parser):
         filters["file_size_filters"] = args.file_size_filters
     if getattr(args, "available_filter", None) is not None:
         filters["available"] = args.available_filter
-    if getattr(args, "physical_available_filter", None) is not None:
-        filters["physical_available"] = args.physical_available_filter
+    if getattr(args, "physically_available_filter", None) is not None:
+        filters["physically_available"] = args.physically_available_filter
     return filters
 
 

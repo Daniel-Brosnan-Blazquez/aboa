@@ -69,7 +69,7 @@ class TestDatamodel(unittest.TestCase):
             archive_configuration=self.archive_configuration,
             delete_archive_configuration=self.delete_archive_configuration,
             available=False,
-            physical_available=False,
+            physically_available=False,
             last_access_date=datetime.datetime(2026, 7, 2, 10, 2, 0),
             file_group="group_a",
             file_type="text",
@@ -103,7 +103,7 @@ class TestDatamodel(unittest.TestCase):
         assert structure["archive_date"] == "2026-07-02T10:01:00"
         assert structure["file_size"] == 10
         assert structure["available"] is False
-        assert structure["physical_available"] is False
+        assert structure["physically_available"] is False
         assert structure["archive_configuration_uuid"] == str(self.archive_configuration.archive_configuration_uuid)
         assert structure["delete_archive_configuration_uuid"] == str(self.delete_archive_configuration.archive_configuration_uuid)
         assert structure["last_access_date"] == "2026-07-02T10:02:00"
@@ -136,7 +136,7 @@ class TestDatamodel(unittest.TestCase):
         structure = archived_file.jsonify()
 
         assert structure["available"] is True
-        assert structure["physical_available"] is True
+        assert structure["physically_available"] is True
         assert structure["archive_configuration_uuid"] is None
         assert structure["delete_archive_configuration_uuid"] is None
         assert structure["last_access_date"] is None
