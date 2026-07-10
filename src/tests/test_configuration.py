@@ -144,6 +144,7 @@ class TestConfiguration(unittest.TestCase):
         for configuration_name in (
             "example_reserved_unknown_directory.xml",
             "example_reserved_trash_directory.xml",
+            "example_reserved_error_directory.xml",
         ):
             with self.subTest(configuration_name=configuration_name):
                 with self.assertRaises(ArchiveConfigurationError):

@@ -15,7 +15,7 @@ from aboa.engine.functions import get_schemas_path
 
 logger = logging.getLogger(__name__)
 
-RESERVED_FILE_DIRECTORIES = {"unknown", "trash"}
+RESERVED_FILE_DIRECTORIES = {"unknown", "trash", "error"}
 
 
 def _validate_with_lxml(configuration_xml):
