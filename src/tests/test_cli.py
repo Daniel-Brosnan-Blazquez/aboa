@@ -10,8 +10,10 @@ import sys
 import unittest
 from pathlib import Path
 
+from aboa.engine import commands as commands_module
 from aboa.engine.commands import aboa_archive, aboa_delete, aboa_recover, aboa_retrieve
 from aboa.engine.engine import Engine
+from aboa.engine.errors import ArchiveDeletionError, ArchiveFileError
 from aboa.engine.query import Query
 
 
@@ -69,6 +71,61 @@ class TestCli(unittest.TestCase):
             names={"filter": [Path(input_file).name], "op": "in"},
             selection="last",
         )[0]
+
+    def test_cli_archive_handles_archive_file_error_without_traceback(self):
+        """
+        Convert expected archive failures into clean CLI errors.
+        """
+        original_engine = commands_module.Engine
+
+        class FailingArchiveEngine:
+            def archive_file(self, file_path, delete=False):
+                raise ArchiveFileError("archive failed cleanly")
+
+            def close_session(self):
+                return None
+
+        try:
+            commands_module.Engine = FailingArchiveEngine
+            sys.argv = ["aboa_archive", "--file", "missing.txt"]
+            stderr = io.StringIO()
+            with contextlib.redirect_stderr(stderr):
+                with self.assertRaises(SystemExit) as context:
+                    aboa_archive()
+        finally:
+            commands_module.Engine = original_engine
+
+        assert context.exception.code == 1
+        assert "archive failed cleanly" in stderr.getvalue()
+        assert "Traceback" not in stderr.getvalue()
+
+    def test_cli_delete_handles_archive_deletion_error_without_traceback(self):
+        """
+        Convert expected delete failures into clean CLI errors.
+        """
+        original_engine = commands_module.Engine
+
+        class FailingDeleteEngine:
+            def delete_files(self, filters=None, physical_delete=False, permanent_delete=False,
+                             purge_entries=False, removal_justification="manual_delete"):
+                raise ArchiveDeletionError("delete failed cleanly")
+
+            def close_session(self):
+                return None
+
+        try:
+            commands_module.Engine = FailingDeleteEngine
+            sys.argv = ["aboa_delete", "--file-group", "group_a"]
+            stderr = io.StringIO()
+            with contextlib.redirect_stderr(stderr):
+                with self.assertRaises(SystemExit) as context:
+                    aboa_delete()
+        finally:
+            commands_module.Engine = original_engine
+
+        assert context.exception.code == 1
+        assert "delete failed cleanly" in stderr.getvalue()
+        assert "Traceback" not in stderr.getvalue()
 
     def test_cli_archive_and_retrieve(self):
         """

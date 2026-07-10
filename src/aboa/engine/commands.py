@@ -8,6 +8,7 @@ import argparse
 import json
 import os
 
+from aboa.engine.errors import ArchiveDeletionError, ArchiveFileError
 from aboa.engine.engine import Engine
 from aboa.engine.operators import arithmetic_operators, text_operators
 from aboa.engine.query import Query
@@ -201,6 +202,13 @@ def _print_json(payload):
     Print a JSON payload using the formatting expected by ABOA commands.
     """
     print(json.dumps(payload, indent=2, sort_keys=True))
+
+
+def _exit_with_error(parser, message):
+    """
+    Exit a command cleanly for an expected engine-domain error.
+    """
+    parser.exit(status=1, message="error: {}\n".format(message))
 
 
 def _jsonify_rows(rows):
@@ -521,6 +529,9 @@ def aboa_archive():
         )[0]
         _print_json(archived_file.jsonify())
         logger.info("Archive command completed for file {}".format(args.file))
+    except ArchiveFileError as exc:
+        logger.error("Archive command failed for file {}: {}".format(args.file, exc))
+        _exit_with_error(parser, exc)
     finally:
         engine.close_session()
 
@@ -639,6 +650,9 @@ def aboa_delete():
             )
         _print_json(_jsonify_rows(files))
         logger.info("Delete command completed on {} file/s".format(len(files)))
+    except ArchiveDeletionError as exc:
+        logger.error("Delete command failed: {}".format(exc))
+        _exit_with_error(parser, exc)
     finally:
         engine.close_session()
 
