@@ -332,8 +332,6 @@ class Engine():
 
         if target_directory == "error" and is_duplicate_reception:
             existing_error_file = self._find_existing_duplicate_error_file(
-                root_directory.path,
-                archive_date,
                 os.path.basename(file_path),
                 checksum,
             )
@@ -1064,7 +1062,7 @@ class Engine():
         base, extension = os.path.splitext(file_name)
         return os.path.join(directory, "{}_{}{}".format(base, uuid.uuid4(), extension))
 
-    def _find_existing_duplicate_error_file(self, root_directory, archive_date, file_name, checksum):
+    def _find_existing_duplicate_error_file(self, file_name, checksum):
         """
         Return an existing error-area copy for a duplicate reception, if present.
 
@@ -1074,32 +1072,21 @@ class Engine():
         if checksum is None:
             return None
 
-        error_directory = os.path.join(
-            root_directory,
-            "error",
-            archive_date.strftime("%Y"),
-            archive_date.strftime("%m"),
-            archive_date.strftime("%d"),
-        )
+        error_path_filter = "%{}error{}%".format(os.sep, os.sep)
         candidates = (
             self.session.query(ArchivedFile)
             .filter(ArchivedFile.name == file_name)
             .filter(ArchivedFile.checksum == checksum)
             .filter(ArchivedFile.physically_available == True)
-            .order_by(ArchivedFile.archive_date.asc())
+            .filter(ArchivedFile.path.like(error_path_filter))
+            .order_by(ArchivedFile.archive_date.asc(), ArchivedFile.file_uuid.asc())
             .all()
         )
         for candidate in candidates:
-            if not candidate.path.startswith(error_directory + os.sep):
-                continue
             if not os.path.exists(candidate.path):
                 candidate.physically_available = False
                 continue
-            try:
-                if self._checksum(candidate.path) == checksum:
-                    return candidate
-            except Exception:
-                logger.warning("Could not verify duplicate error payload {}".format(candidate.path))
+            return candidate
         return None
 
     def _delete_input_file(self, file_path, archived_file):
