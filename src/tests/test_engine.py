@@ -340,6 +340,7 @@ class TestEngine(unittest.TestCase):
         queued = self.engine.query.get_files_to_be_removed(file_uuids={"filter": [archived_file.file_uuid], "op": "in"})
 
         assert deleted[0].available is False
+        assert deleted[0].physical_available is True
         assert deleted[0].removal_date is not None
         assert deleted[0].removal_justification == "manual_delete"
         assert deleted[0].delete_archive_configuration_uuid is None
@@ -352,6 +353,96 @@ class TestEngine(unittest.TestCase):
         assert queued[0].removal_date == deleted[0].removal_date + datetime.timedelta(days=self.engine.final_removal_delay_days)
         assert os.path.exists(queued[0].path)
         assert "trash" in queued[0].path.split(os.sep)
+
+    def test_delete_physical_is_idempotent_when_payload_is_already_in_trash(self):
+        """
+        Repeating a physical delete keeps the original removal metadata and trash row.
+        """
+        input_file = self.input_file("sample.txt")
+        archived_file = self.archive_and_get(input_file)
+
+        first_delete = self.engine.delete_files(file_uuids=[archived_file.file_uuid], physical_delete=True)[0]
+        first_removal_date = first_delete.removal_date
+        first_queued = self.engine.query.get_files_to_be_removed(file_uuids={"filter": [archived_file.file_uuid], "op": "in"})[0]
+        second_delete = self.engine.delete_files(file_uuids=[archived_file.file_uuid], physical_delete=True)[0]
+        second_queued = self.engine.query.get_files_to_be_removed(file_uuids={"filter": [archived_file.file_uuid], "op": "in"})
+
+        assert second_delete.available is False
+        assert second_delete.physical_available is True
+        assert second_delete.removal_date == first_removal_date
+        assert len(second_queued) == 1
+        assert second_queued[0].file_to_remove_uuid == first_queued.file_to_remove_uuid
+        assert second_queued[0].path == first_queued.path
+        assert os.path.exists(first_queued.path)
+
+    def test_delete_physical_marks_missing_payload_not_physically_available(self):
+        """
+        Physical deletion notices when the archive payload has already disappeared.
+        """
+        input_file = self.input_file("sample.txt")
+        archived_file = self.archive_and_get(input_file)
+        os.unlink(archived_file.path)
+
+        deleted = self.engine.delete_files(file_uuids=[archived_file.file_uuid], physical_delete=True)
+        queued = self.engine.query.get_files_to_be_removed(file_uuids={"filter": [archived_file.file_uuid], "op": "in"})
+
+        assert deleted[0].available is False
+        assert deleted[0].physical_available is False
+        assert queued == []
+
+    def test_delete_permanently_bypasses_trash(self):
+        """
+        Permanent deletion removes the payload immediately and leaves no trash row.
+        """
+        input_file = self.input_file("sample.txt")
+        archived_file = self.archive_and_get(input_file)
+        archive_path = archived_file.path
+
+        deleted = self.engine.delete_files(file_uuids=[archived_file.file_uuid], permanent_delete=True)
+        queued = self.engine.query.get_files_to_be_removed(file_uuids={"filter": [archived_file.file_uuid], "op": "in"})
+
+        assert deleted[0].available is False
+        assert deleted[0].physical_available is False
+        assert not os.path.exists(archive_path)
+        assert queued == []
+
+    def test_delete_archived_file_entry_requires_no_physical_payload(self):
+        """
+        Purge archived_files rows only after the managed payload has gone.
+        """
+        input_file = self.input_file("sample.txt")
+        archived_file = self.archive_and_get(input_file)
+        file_uuid = archived_file.file_uuid
+
+        with self.assertRaises(ArchiveDeletionError):
+            self.engine.delete_archived_file_entries(file_uuids=[file_uuid])
+        self.engine.delete_files(file_uuids=[file_uuid], permanent_delete=True)
+
+        purged = self.engine.delete_archived_file_entries(file_uuids=[file_uuid])
+        remaining = self.engine.query.get_archived_files(file_uuids={"filter": [file_uuid], "op": "in"})
+
+        assert len(purged) == 1
+        assert purged[0].file_uuid == file_uuid
+        assert remaining == []
+
+    def test_repeated_duplicate_reception_reuses_existing_error_payload(self):
+        """
+        Do not create another error-folder copy for the same duplicate checksum.
+        """
+        input_file = self.input_file("sample.txt")
+        self.archive_and_get(input_file)
+
+        self.engine.archive_file(str(input_file))
+        first_error_files = list(self.archive_root.glob("error/**/*.txt"))
+        self.engine.archive_file(str(input_file))
+        second_error_files = list(self.archive_root.glob("error/**/*.txt"))
+        error_rows = self.engine.query.get_archived_files(paths={"filter": "%/error/%", "op": "like"})
+        operations = self.engine.query.get_archive_operations(operations={"filter": "archive", "op": "like"})
+
+        assert len(first_error_files) == 1
+        assert len(second_error_files) == 1
+        assert len(error_rows) == 1
+        assert len(operations) == 2
 
     def test_recover_files_from_trash(self):
         """
@@ -370,6 +461,7 @@ class TestEngine(unittest.TestCase):
         assert len(recovered) == 1
         assert recovered[0].file_uuid == archived_file.file_uuid
         assert recovered[0].available is True
+        assert recovered[0].physical_available is True
         assert recovered[0].removal_date is None
         assert recovered[0].removal_justification is None
         assert recovered[0].path == archive_path

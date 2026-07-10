@@ -63,6 +63,7 @@ class Query():
         "archive_date": ArchivedFile.archive_date,
         "file_size": ArchivedFile.file_size,
         "available": ArchivedFile.available,
+        "physical_available": ArchivedFile.physical_available,
         "root_directory_uuid": ArchivedFile.root_directory_uuid,
         "last_access_date": ArchivedFile.last_access_date,
         "file_group": ArchivedFile.file_group,
@@ -198,6 +199,7 @@ class Query():
     def get_archived_files(self, file_uuids=None, names=None, paths=None,
                            reception_date_filters=None, archive_date_filters=None,
                            file_size_filters=None, available=None,
+                           physical_available=None,
                            root_directory_uuids=None, last_access_date_filters=None, file_group=None,
                            file_type=None, file_class=None, file_version=None,
                            archive_configuration_uuids=None,
@@ -218,6 +220,7 @@ class Query():
         :param archive_date_filters: archive date filters
         :param file_size_filters: file size numeric filters
         :param available: availability boolean filter
+        :param physical_available: physical payload availability boolean filter
         :param root_directory_uuids: root-directory UUID text filter
         :param last_access_date_filters: last access date filters
         :param file_group: file group text filter
@@ -269,6 +272,10 @@ class Query():
         if available is not None:
             functions.is_valid_bool_filter(available)
             params.append(arithmetic_operators[available["op"]](ArchivedFile.available, available["filter"]))
+
+        if physical_available is not None:
+            functions.is_valid_bool_filter(physical_available)
+            params.append(arithmetic_operators[physical_available["op"]](ArchivedFile.physical_available, physical_available["filter"]))
 
         query = self.session.query(ArchivedFile).filter(*params)
 

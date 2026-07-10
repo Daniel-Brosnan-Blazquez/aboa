@@ -320,13 +320,31 @@ class Engine():
             target_directory = "error"
 
         # Check duplication
+        is_duplicate_reception = False
         if self.session.query(ArchivedFile).filter(ArchivedFile.name == os.path.basename(file_path), ArchivedFile.available == True).first() is not None:
             # Duplicate reception follows the same recoverable path as processor
             # failures so the received file remains under ABOA control.
+            is_duplicate_reception = True
             error_message = exit_codes["FILE_ALREADY_ARCHIVED"]["message"].format(file_path)
             failures.append((exit_codes["FILE_ALREADY_ARCHIVED"]["status"], error_message))
             target_directory = "error"
             logger.error(error_message)
+
+        if target_directory == "error" and is_duplicate_reception:
+            existing_error_file = self._find_existing_duplicate_error_file(
+                root_directory.path,
+                archive_date,
+                os.path.basename(file_path),
+                checksum,
+            )
+            if existing_error_file is not None:
+                for status, message in failures:
+                    self.record_failure("archive", status, message, existing_error_file)
+                self.session.commit()
+                if delete:
+                    self._delete_input_file(file_path, existing_error_file)
+                logger.info("Archive request reused existing duplicate error file {}".format(existing_error_file.path))
+                return None
 
         # Store file in the archive, first trying a hard link and falling back to a copy.
         try:
@@ -359,14 +377,7 @@ class Engine():
         if delete:
             # The input is removed only after the file has been stored under ABOA
             # management and the inventory transaction has committed.
-            try:
-                os.unlink(file_path)
-            except Exception as exc:
-                message = exit_codes["INPUT_DELETE_FAILED"]["message"].format(file_path, exc)
-                logger.error(message)
-                self.record_failure("archive", exit_codes["INPUT_DELETE_FAILED"]["status"], message, archived_file)
-                self.session.commit()
-                raise ArchiveFileError(message)
+            self._delete_input_file(file_path, archived_file)
 
         logger.info("Archive request performed for file {}".format(file_path))
         return None
@@ -483,9 +494,9 @@ class Engine():
                 return candidate
             counter += 1
 
-    def delete_files(self, filters=None, file_uuids=None, physical_delete=False, removal_justification="manual_delete"):
+    def delete_files(self, filters=None, file_uuids=None, physical_delete=False, permanent_delete=False, removal_justification="manual_delete"):
         """
-        Delete archived files logically and optionally move payloads to trash.
+        Delete archived files logically and optionally remove their payloads.
 
         :param filters: query filters accepted by ``Query.get_archived_files``
         :type filters: dict or None
@@ -493,6 +504,8 @@ class Engine():
         :type file_uuids: list or None
         :param physical_delete: move files from the POSIX archive to trash when true
         :type physical_delete: bool
+        :param permanent_delete: delete physical payloads immediately, bypassing trash
+        :type permanent_delete: bool
         :param removal_justification: reason stored on logically removed files
         :type removal_justification: str or None
 
@@ -509,16 +522,64 @@ class Engine():
             files = self.query.get_archived_files(**filters)
             now = datetime.datetime.utcnow()
             for archived_file in files:
-                # Logical deletion is the default behavior. Physical deletion is an
-                # explicit caller choice and still leaves the inventory row for trace.
+                # Preserve the first logical deletion timestamp. A repeated delete
+                # can still perform a requested physical/permanent cleanup.
+                if archived_file.available or archived_file.removal_date is None:
+                    archived_file.removal_date = now
+                if archived_file.available or archived_file.removal_justification is None:
+                    archived_file.removal_justification = removal_justification
                 archived_file.available = False
-                archived_file.removal_date = now
-                archived_file.removal_justification = removal_justification
                 archived_file.deleteArchiveConfiguration = None
-                if physical_delete:
-                    self.move_archived_file_to_trash(archived_file, now)
+                if permanent_delete:
+                    self.delete_archived_file_permanently(archived_file)
+                elif physical_delete:
+                    self.move_archived_file_to_trash(archived_file, archived_file.removal_date)
+                else:
+                    self._sync_physical_availability(archived_file)
             self.session.commit()
             logger.info("Delete request performed on {} file/s".format(len(files)))
+            return files
+        except Exception as exc:
+            self.session.rollback()
+            message = exit_codes["DELETE_FAILED"]["message"].format(exc)
+            logger.error(message)
+            self.record_failure("delete", exit_codes["DELETE_FAILED"]["status"], message)
+            self.session.commit()
+            raise ArchiveDeletionError(message) from exc
+
+    def delete_archived_file_entries(self, filters=None, file_uuids=None):
+        """
+        Remove archived-file inventory rows only when no managed payload remains.
+
+        :param filters: query filters accepted by ``Query.get_archived_files``
+        :type filters: dict or None
+        :param file_uuids: optional list of file UUIDs to purge from inventory
+        :type file_uuids: list or None
+
+        :return: removed archived-file entities
+        :rtype: list
+
+        :raises ArchiveDeletionError: when any selected file still has bytes in
+            the archive path or trash, or when the inventory update fails
+        """
+        try:
+            filters = dict(filters or {})
+            if file_uuids is not None:
+                filters["file_uuids"] = {"filter": file_uuids, "op": "in"}
+            files = self.query.get_archived_files(**filters)
+            for archived_file in files:
+                if self._sync_physical_availability(archived_file):
+                    raise ArchiveDeletionError(
+                        "The archived-file entry {} cannot be deleted because its payload is still physically available".format(
+                            archived_file.file_uuid
+                        )
+                    )
+                self._detach_archive_operations(archived_file)
+                for file_to_be_removed in self._get_files_to_be_removed(archived_file):
+                    self.session.delete(file_to_be_removed)
+                self.session.delete(archived_file)
+            self.session.commit()
+            logger.info("Archived-file entry deletion request performed on {} file/s".format(len(files)))
             return files
         except Exception as exc:
             self.session.rollback()
@@ -841,7 +902,10 @@ class Engine():
             self.session.add(root_directory)
             self.session.commit()
 
-    def _build_archived_file(self, file_path, archive_path, reception_date, archive_date, metadata, checksum, root_directory, archive_configuration=None, available=True):
+    def _build_archived_file(
+            self, file_path, archive_path, reception_date, archive_date,
+            metadata, checksum, root_directory, archive_configuration=None,
+            available=True, physical_available=True):
         """
         Build an archived-file row with the common metadata mapping.
 
@@ -863,6 +927,8 @@ class Engine():
         :type archive_configuration: aboa.datamodel.archived_files.ArchiveConfiguration or None
         :param available: logical availability flag
         :type available: bool
+        :param physical_available: whether the recorded payload exists physically
+        :type physical_available: bool
 
         :return: archived-file inventory entity
         :rtype: aboa.datamodel.archived_files.ArchivedFile
@@ -881,6 +947,7 @@ class Engine():
             archive_configuration=archive_configuration,
             delete_archive_configuration=delete_archive_configuration,
             available=available,
+            physical_available=physical_available,
             file_group=metadata.get("file_group"),
             file_type=metadata.get("file_type"),
             file_class=metadata.get("file_class"),
@@ -923,7 +990,18 @@ class Engine():
 
         archived_file = None
         if root_directory is not None:
-            archived_file = self._build_archived_file(file_path, archive_path, reception_date, archive_date, metadata, checksum, root_directory, archive_configuration, available=False)
+            archived_file = self._build_archived_file(
+                file_path,
+                archive_path,
+                reception_date,
+                archive_date,
+                metadata,
+                checksum,
+                root_directory,
+                archive_configuration,
+                available=False,
+                physical_available=os.path.exists(archive_path),
+            )
             self.session.add(archived_file)
 
         for status, message in failures:
@@ -986,6 +1064,59 @@ class Engine():
         base, extension = os.path.splitext(file_name)
         return os.path.join(directory, "{}_{}{}".format(base, uuid.uuid4(), extension))
 
+    def _find_existing_duplicate_error_file(self, root_directory, archive_date, file_name, checksum):
+        """
+        Return an existing error-area copy for a duplicate reception, if present.
+
+        Repeated duplicate inputs with the same file name and checksum should not
+        create another physical copy in the same destination error folder.
+        """
+        if checksum is None:
+            return None
+
+        error_directory = os.path.join(
+            root_directory,
+            "error",
+            archive_date.strftime("%Y"),
+            archive_date.strftime("%m"),
+            archive_date.strftime("%d"),
+        )
+        candidates = (
+            self.session.query(ArchivedFile)
+            .filter(ArchivedFile.name == file_name)
+            .filter(ArchivedFile.checksum == checksum)
+            .filter(ArchivedFile.physical_available == True)
+            .order_by(ArchivedFile.archive_date.asc())
+            .all()
+        )
+        for candidate in candidates:
+            if not candidate.path.startswith(error_directory + os.sep):
+                continue
+            if not os.path.exists(candidate.path):
+                candidate.physical_available = False
+                continue
+            try:
+                if self._checksum(candidate.path) == checksum:
+                    return candidate
+            except Exception:
+                logger.warning("Could not verify duplicate error payload {}".format(candidate.path))
+        return None
+
+    def _delete_input_file(self, file_path, archived_file):
+        """
+        Delete an input file after ABOA has recorded a managed copy.
+        """
+        if os.path.abspath(file_path) == os.path.abspath(archived_file.path):
+            return
+        try:
+            os.unlink(file_path)
+        except Exception as exc:
+            message = exit_codes["INPUT_DELETE_FAILED"]["message"].format(file_path, exc)
+            logger.error(message)
+            self.record_failure("archive", exit_codes["INPUT_DELETE_FAILED"]["status"], message, archived_file)
+            self.session.commit()
+            raise ArchiveFileError(message)
+
     def move_archived_file_to_trash(self, archived_file, removal_date=None):
         """
         Move an archived payload to trash and queue it for final removal.
@@ -999,7 +1130,12 @@ class Engine():
         :rtype: aboa.datamodel.archived_files.FileToBeRemoved or None
         """
         if not os.path.exists(archived_file.path):
-            return self._get_file_to_be_removed(archived_file)
+            file_to_be_removed = self._get_file_to_be_removed(archived_file)
+            archived_file.physical_available = (
+                file_to_be_removed is not None
+                and os.path.exists(file_to_be_removed.path)
+            )
+            return file_to_be_removed
 
         removal_date = removal_date or datetime.datetime.utcnow()
         final_removal_date = removal_date + datetime.timedelta(days=self.final_removal_delay_days)
@@ -1019,7 +1155,36 @@ class Engine():
             file_to_be_removed.path = trash_path
             file_to_be_removed.rootDirectory = root_directory
             file_to_be_removed.removal_date = final_removal_date
+        archived_file.physical_available = True
         return file_to_be_removed
+
+    def delete_archived_file_permanently(self, archived_file):
+        """
+        Delete a managed payload immediately without moving it through trash.
+
+        The inventory row is retained; callers that also need to remove metadata
+        can call ``delete_archived_file_entries`` after this method has made the
+        physical payload unavailable.
+
+        :param archived_file: archived-file inventory row whose payload is removed
+        :type archived_file: aboa.datamodel.archived_files.ArchivedFile
+
+        :return: True when at least one filesystem payload was deleted
+        :rtype: bool
+        """
+        deleted_payload = False
+        if os.path.exists(archived_file.path):
+            os.unlink(archived_file.path)
+            deleted_payload = True
+
+        for file_to_be_removed in self._get_files_to_be_removed(archived_file):
+            if os.path.exists(file_to_be_removed.path):
+                os.unlink(file_to_be_removed.path)
+                deleted_payload = True
+            self.session.delete(file_to_be_removed)
+
+        archived_file.physical_available = False
+        return deleted_payload
 
     def _get_file_to_be_removed(self, archived_file):
         """
@@ -1031,6 +1196,42 @@ class Engine():
             .order_by(FileToBeRemoved.removal_date.desc())
             .first()
         )
+
+    def _get_files_to_be_removed(self, archived_file):
+        """
+        Return all pending final-removal rows for an archived file.
+        """
+        return (
+            self.session.query(FileToBeRemoved)
+            .filter(FileToBeRemoved.file_uuid == archived_file.file_uuid)
+            .order_by(FileToBeRemoved.removal_date.desc())
+            .all()
+        )
+
+    def _sync_physical_availability(self, archived_file):
+        """
+        Refresh whether a managed payload exists in the archive path or trash.
+        """
+        physical_available = os.path.exists(archived_file.path)
+        if not physical_available:
+            physical_available = any(
+                os.path.exists(file_to_be_removed.path)
+                for file_to_be_removed in self._get_files_to_be_removed(archived_file)
+            )
+        archived_file.physical_available = physical_available
+        return physical_available
+
+    def _detach_archive_operations(self, archived_file):
+        """
+        Preserve operation rows while removing their archived-file foreign key.
+        """
+        for operation in (
+            self.session.query(ArchiveOperation)
+            .filter(ArchiveOperation.file_uuid == archived_file.file_uuid)
+            .all()
+        ):
+            operation.archivedFile = None
+            operation.file_uuid = None
 
     def _build_trash_path(self, root_directory, removal_date, archived_file):
         """
@@ -1056,8 +1257,11 @@ class Engine():
         os.makedirs(directory, exist_ok=True)
         trash_name = os.path.basename(archived_file.path)
         trash_path = os.path.join(directory, trash_name)
+        if not os.path.exists(trash_path):
+            return trash_path
 
-        return trash_path
+        base, extension = os.path.splitext(trash_name)
+        return os.path.join(directory, "{}_{}{}".format(base, archived_file.file_uuid, extension))
 
     def _recover_file_from_trash(self, file_to_be_removed):
         """
@@ -1076,8 +1280,10 @@ class Engine():
         if archived_file is None:
             raise ArchiveRecoveryError("The trash row is not linked to an archived file")
         if not os.path.exists(file_to_be_removed.path):
+            self._sync_physical_availability(archived_file)
             raise ArchiveRecoveryError("The trash payload {} does not exist".format(file_to_be_removed.path))
         if os.path.exists(archived_file.path):
+            self._sync_physical_availability(archived_file)
             raise ArchiveRecoveryError("The archive payload {} already exists".format(archived_file.path))
 
         archive_directory = os.path.dirname(archived_file.path)
@@ -1086,6 +1292,7 @@ class Engine():
         shutil.move(file_to_be_removed.path, archived_file.path)
 
         archived_file.available = True
+        archived_file.physical_available = True
         archived_file.removal_date = None
         archived_file.removal_justification = None
         archived_file.file_size = os.path.getsize(archived_file.path)

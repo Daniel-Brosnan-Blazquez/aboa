@@ -73,6 +73,7 @@ class TestQuery(unittest.TestCase):
         configuration_files = query.get_archived_files(archive_configuration_uuids={"filter": [archive_configuration.archive_configuration_uuid], "op": "in"})
         root_directory_files = query.get_archived_files(root_directory_uuids={"filter": [configuration_files[0].root_directory_uuid], "op": "in"})
         checksum_files = query.get_archived_files(checksum={"filter": configuration_files[0].checksum, "op": "like"})
+        physical_files = query.get_archived_files(physical_available={"filter": True, "op": "=="})
         self.engine.delete_files(file_uuids=[configuration_files[0].file_uuid])
         removed_files = query.get_archived_files(removal_justification={"filter": "manual_delete", "op": "like"})
 
@@ -83,6 +84,7 @@ class TestQuery(unittest.TestCase):
         assert len(configuration_files) == 2
         assert len(root_directory_files) == 2
         assert len(checksum_files) == 1
+        assert len(physical_files) == 2
         assert len(removed_files) == 1
         assert removed_files[0].removal_justification == "manual_delete"
 

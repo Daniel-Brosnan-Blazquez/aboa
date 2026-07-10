@@ -79,9 +79,12 @@ def apply_final_removal(engine, dry_run=False, now=None):
 
         for file_to_be_removed in candidates:
             try:
+                archived_file = file_to_be_removed.archivedFile
                 if os.path.exists(file_to_be_removed.path):
                     os.unlink(file_to_be_removed.path)
                 engine.session.delete(file_to_be_removed)
+                if archived_file is not None:
+                    engine._sync_physical_availability(archived_file)
             except Exception as exc:
                 exit_code = engine.get_exit_code("FINAL_REMOVAL_FAILED")
                 message = exit_code["message"].format(file_to_be_removed.path, exc)

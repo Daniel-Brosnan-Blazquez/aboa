@@ -352,6 +352,13 @@ def _add_archived_file_filter_arguments(parser):
         metavar="FILTER",
         help="availability filter; use VALUE or OP:VALUE",
     )
+    parser.add_argument(
+        "--physical-available",
+        type=_parse_bool_filter,
+        dest="physical_available_filter",
+        metavar="FILTER",
+        help="physical payload availability filter; use VALUE or OP:VALUE",
+    )
 
 
 def _build_archived_file_filters(args, parser):
@@ -367,6 +374,8 @@ def _build_archived_file_filters(args, parser):
         filters["file_size_filters"] = args.file_size_filters
     if getattr(args, "available_filter", None) is not None:
         filters["available"] = args.available_filter
+    if getattr(args, "physical_available_filter", None) is not None:
+        filters["physical_available"] = args.physical_available_filter
     return filters
 
 
@@ -575,6 +584,18 @@ def aboa_delete():
         help="move matching archived payloads to trash in addition to logical deletion",
     )
     parser.add_argument(
+        "--permanent",
+        action="store_true",
+        dest="permanent_delete",
+        help="delete matching payloads immediately instead of moving them to trash",
+    )
+    parser.add_argument(
+        "--purge-entry",
+        action="store_true",
+        dest="purge_entry",
+        help="delete matching archived-file rows only when their payloads are gone",
+    )
+    parser.add_argument(
         "-e",
         "--reason",
         default="manual_delete",
@@ -590,6 +611,8 @@ def aboa_delete():
     )
     args = parser.parse_args()
     filters = _build_archived_file_filters(args, parser)
+    if args.physical and args.permanent_delete:
+        parser.error("--physical and --permanent cannot be used together")
     if not filters and not args.list_files:
         parser.error("at least one archived-file filter is required")
     logger.info("Delete command received with filters {}".format(filters))
@@ -602,11 +625,15 @@ def aboa_delete():
             logger.info("Delete command listed {} candidate file/s".format(len(files)))
             return
 
-        files = engine.delete_files(
-            filters=filters,
-            physical_delete=args.physical,
-            removal_justification=args.removal_reason,
-        )
+        if args.purge_entry:
+            files = engine.delete_archived_file_entries(filters=filters)
+        else:
+            files = engine.delete_files(
+                filters=filters,
+                physical_delete=args.physical,
+                permanent_delete=args.permanent_delete,
+                removal_justification=args.removal_reason,
+            )
         _print_json(_jsonify_rows(files))
         logger.info("Delete command completed on {} file/s".format(len(files)))
     finally:

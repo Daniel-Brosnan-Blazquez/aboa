@@ -69,6 +69,7 @@ CREATE TABLE aboa.archived_files (
 	archive_date timestamp NOT NULL,
 	file_size bigint NOT NULL,
 	available bool NOT NULL,
+	physical_available bool NOT NULL,
 	last_access_date timestamp,
 	file_group text,
 	file_type text,
@@ -262,6 +263,15 @@ USING btree
 );
 -- ddl-end --
 
+-- object: idx_archived_files_physical_available | type: INDEX --
+-- DROP INDEX IF EXISTS aboa.idx_archived_files_physical_available CASCADE;
+CREATE INDEX idx_archived_files_physical_available ON aboa.archived_files
+USING btree
+(
+	physical_available
+);
+-- ddl-end --
+
 -- object: idx_archived_files_expiration_date | type: INDEX --
 -- DROP INDEX IF EXISTS aboa.idx_archived_files_expiration_date CASCADE;
 CREATE INDEX idx_archived_files_expiration_date ON aboa.archived_files
@@ -351,5 +361,4 @@ USING btree
 	active
 );
 -- ddl-end --
-
 

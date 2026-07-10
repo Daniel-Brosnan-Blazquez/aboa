@@ -153,6 +153,7 @@ class ArchivedFile(Base):
     archive_date = Column(DateTime, index=True, nullable=False)
     file_size = Column(BigInteger, nullable=False)
     available = Column(Boolean, index=True, nullable=False, default=True)
+    physical_available = Column(Boolean, index=True, nullable=False, default=True)
     root_directory_uuid = Column(Text, ForeignKey("archive_root_directories.root_directory_uuid"), nullable=False)
     rootDirectory = relationship("ArchiveRootDirectory", backref="archived_files")
     archive_configuration_uuid = Column(Text, ForeignKey("archive_configurations.archive_configuration_uuid"), nullable=True)
@@ -182,7 +183,7 @@ class ArchivedFile(Base):
 
     def __init__(self, file_uuid, name, path, reception_date, archive_date, file_size, root_directory,
                  archive_configuration=None, delete_archive_configuration=None,
-                 available=True, last_access_date=None, file_group=None, file_type=None,
+                 available=True, physical_available=True, last_access_date=None, file_group=None, file_type=None,
                  file_class=None, file_version=None, validity_start_date=None,
                  validity_stop_date=None, generation_date=None, expiration_date=None,
                  removal_date=None, removal_justification=None, checksum=None):
@@ -199,6 +200,7 @@ class ArchivedFile(Base):
         :param archive_configuration: associated archive configuration used to archive
         :param delete_archive_configuration: associated archive configuration used to delete
         :param available: logical availability flag
+        :param physical_available: whether a managed payload exists in the archive path or trash
         :param last_access_date: last retrieval timestamp
         :param file_group: optional configured file group
         :param file_type: optional file type
@@ -219,6 +221,7 @@ class ArchivedFile(Base):
         self.archive_date = archive_date
         self.file_size = file_size
         self.available = available
+        self.physical_available = physical_available
         self.rootDirectory = root_directory
         self.archiveConfiguration = archive_configuration
         self.deleteArchiveConfiguration = delete_archive_configuration
@@ -250,6 +253,7 @@ class ArchivedFile(Base):
             "archive_date": _isoformat(self.archive_date),
             "file_size": self.file_size,
             "available": self.available,
+            "physical_available": self.physical_available,
             "root_directory_uuid": str(self.root_directory_uuid),
             "archive_configuration_uuid": str(self.archive_configuration_uuid) if self.archive_configuration_uuid else None,
             "delete_archive_configuration_uuid": str(self.delete_archive_configuration_uuid) if self.delete_archive_configuration_uuid else None,

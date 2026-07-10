@@ -78,7 +78,7 @@ CAUTION: Do not modify this file unless you know what you are doing.
 	</constraint>
 </table>
 
-<table name="archived_files" layers="0" collapse-mode="2" max-obj-count="28" z-value="0">
+<table name="archived_files" layers="0" collapse-mode="2" max-obj-count="29" z-value="0">
 	<schema name="aboa"/>
 	<role name="aboa"/>
 	<position x="960" y="360"/>
@@ -101,6 +101,9 @@ CAUTION: Do not modify this file unless you know what you are doing.
 		<type name="bigint" length="0"/>
 	</column>
 	<column name="available" not-null="true">
+		<type name="bool" length="0"/>
+	</column>
+	<column name="physical_available" not-null="true">
 		<type name="bool" length="0"/>
 	</column>
 	<column name="last_access_date">
@@ -150,7 +153,7 @@ CAUTION: Do not modify this file unless you know what you are doing.
 	</constraint>
 
 	<customidxs object-type="column">
-		<object name="root_directory_uuid" index="21"/>
+		<object name="root_directory_uuid" index="22"/>
 	</customidxs>
 	<customidxs object-type="constraint">
 		<object name="archive_root_directories_fk" index="1"/>
@@ -363,6 +366,14 @@ CAUTION: Do not modify this file unless you know what you are doing.
 	 index-type="btree" factor="0">
 		<idxelement use-sorting="false">
 			<column name="available"/>
+		</idxelement>
+</index>
+
+<index name="idx_archived_files_physical_available" table="aboa.archived_files"
+	 concurrent="false" unique="false" fast-update="false" buffering="false" nulls-not-distinct="false"
+	 index-type="btree" factor="0">
+		<idxelement use-sorting="false">
+			<column name="physical_available"/>
 		</idxelement>
 </index>
 
