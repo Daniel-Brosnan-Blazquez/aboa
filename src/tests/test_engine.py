@@ -417,13 +417,17 @@ class TestEngine(unittest.TestCase):
         with self.assertRaises(ArchiveDeletionError):
             self.engine.delete_archived_file_entries(file_uuids=[file_uuid])
         self.engine.delete_files(file_uuids=[file_uuid], permanent_delete=True)
+        self.engine.record_failure("archive", 5, "duplicate reception", archived_file)
+        self.engine.session.commit()
 
         purged = self.engine.delete_archived_file_entries(file_uuids=[file_uuid])
         remaining = self.engine.query.get_archived_files(file_uuids={"filter": [file_uuid], "op": "in"})
+        remaining_operations = self.engine.query.get_archive_operations(file_uuids={"filter": [file_uuid], "op": "in"})
 
         assert len(purged) == 1
         assert purged[0].file_uuid == file_uuid
         assert remaining == []
+        assert remaining_operations == []
 
     def test_repeated_duplicate_reception_reuses_existing_error_payload(self):
         """

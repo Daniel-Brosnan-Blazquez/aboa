@@ -574,7 +574,7 @@ class Engine():
                             archived_file.file_uuid
                         )
                     )
-                self._detach_archive_operations(archived_file)
+                self._delete_associated_archive_operations(archived_file)
                 for file_to_be_removed in self._get_files_to_be_removed(archived_file):
                     self.session.delete(file_to_be_removed)
                 self.session.delete(archived_file)
@@ -1221,17 +1221,16 @@ class Engine():
         archived_file.physically_available = physically_available
         return physically_available
 
-    def _detach_archive_operations(self, archived_file):
+    def _delete_associated_archive_operations(self, archived_file):
         """
-        Preserve operation rows while removing their archived-file foreign key.
+        Delete operation rows associated with an archived-file entry.
         """
         for operation in (
             self.session.query(ArchiveOperation)
             .filter(ArchiveOperation.file_uuid == archived_file.file_uuid)
             .all()
         ):
-            operation.archivedFile = None
-            operation.file_uuid = None
+            self.session.delete(operation)
 
     def _build_trash_path(self, root_directory, removal_date, archived_file):
         """
