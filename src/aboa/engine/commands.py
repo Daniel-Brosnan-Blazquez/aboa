@@ -361,6 +361,7 @@ def _add_archived_file_filter_arguments(parser):
         help="availability filter; use VALUE or OP:VALUE",
     )
     parser.add_argument(
+        "-B",
         "--physically-available",
         type=_parse_bool_filter,
         dest="physically_available_filter",
@@ -603,12 +604,14 @@ def aboa_delete():
         help="move matching archived payloads to trash in addition to logical deletion",
     )
     parser.add_argument(
+        "-D",
         "--permanent",
         action="store_true",
         dest="permanent_delete",
         help="delete matching payloads immediately instead of moving them to trash",
     )
     parser.add_argument(
+        "-I",
         "--purge-entry",
         action="store_true",
         dest="purge_entry",

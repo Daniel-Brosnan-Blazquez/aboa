@@ -215,6 +215,35 @@ class TestCli(unittest.TestCase):
         assert deleted_file.available is False
         assert deleted_file.removal_justification == "operator_request"
 
+    def test_cli_short_aliases_cover_physical_availability_and_permanent_purge(self):
+        """
+        Use short aliases for physical availability, permanent delete, and purge.
+        """
+        input_file = self.input_file("sample.txt")
+        archived_file = self.archive_and_get(input_file)
+        file_uuid = archived_file.file_uuid
+        archive_path = archived_file.path
+
+        sys.argv = ["aboa_retrieve", "-u", str(file_uuid), "-B", "true", "-l"]
+        list_stdout = io.StringIO()
+        with contextlib.redirect_stdout(list_stdout):
+            aboa_retrieve()
+        list_output = json.loads(list_stdout.getvalue())
+
+        sys.argv = ["aboa_delete", "-u", str(file_uuid), "-D", "-I"]
+        delete_stdout = io.StringIO()
+        with contextlib.redirect_stdout(delete_stdout):
+            aboa_delete()
+        delete_output = json.loads(delete_stdout.getvalue())
+        remaining = self.engine.query.get_archived_files(file_uuids={"filter": [file_uuid], "op": "in"})
+
+        assert len(list_output) == 1
+        assert list_output[0]["file_uuid"] == str(file_uuid)
+        assert len(delete_output) == 1
+        assert delete_output[0]["file_uuid"] == str(file_uuid)
+        assert remaining == []
+        assert not Path(archive_path).exists()
+
     def test_cli_recover_from_trash(self):
         """
         Recover a physically deleted file through the CLI.
