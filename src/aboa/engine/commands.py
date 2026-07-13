@@ -628,6 +628,10 @@ def aboa_delete():
         parser.error("--physical and --purge-entry cannot be used together; use --permanent --purge-entry")
     if not filters and not args.list_files:
         parser.error("at least one archived-file filter is required")
+    if args.permanent_delete:
+        filters.setdefault("physically_available", {"filter": True, "op": "=="})
+    elif not args.physical and not args.purge_entry:
+        filters.setdefault("available", {"filter": True, "op": "=="})
     logger.info("Delete command received with filters {}".format(filters))
 
     engine = Engine()

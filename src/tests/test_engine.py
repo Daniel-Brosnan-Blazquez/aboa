@@ -354,9 +354,9 @@ class TestEngine(unittest.TestCase):
         assert os.path.exists(queued[0].path)
         assert "trash" in queued[0].path.split(os.sep)
 
-    def test_delete_physical_is_idempotent_when_payload_is_already_in_trash(self):
+    def test_delete_does_not_select_already_deleted_files_by_default(self):
         """
-        Repeating a physical delete keeps the original removal metadata and trash row.
+        Repeating a delete skips files already marked unavailable.
         """
         input_file = self.input_file("sample.txt")
         archived_file = self.archive_and_get(input_file)
@@ -364,16 +364,37 @@ class TestEngine(unittest.TestCase):
         first_delete = self.engine.delete_files(file_uuids=[archived_file.file_uuid], physical_delete=True)[0]
         first_removal_date = first_delete.removal_date
         first_queued = self.engine.query.get_files_to_be_removed(file_uuids={"filter": [archived_file.file_uuid], "op": "in"})[0]
-        second_delete = self.engine.delete_files(file_uuids=[archived_file.file_uuid], physical_delete=True)[0]
+        second_delete = self.engine.delete_files(file_uuids=[archived_file.file_uuid], physical_delete=True)
         second_queued = self.engine.query.get_files_to_be_removed(file_uuids={"filter": [archived_file.file_uuid], "op": "in"})
 
-        assert second_delete.available is False
-        assert second_delete.physically_available is True
-        assert second_delete.removal_date == first_removal_date
+        assert second_delete == []
+        assert archived_file.available is False
+        assert archived_file.physically_available is True
+        assert archived_file.removal_date == first_removal_date
         assert len(second_queued) == 1
         assert second_queued[0].file_to_remove_uuid == first_queued.file_to_remove_uuid
         assert second_queued[0].path == first_queued.path
         assert os.path.exists(first_queued.path)
+
+    def test_physical_delete_can_process_logically_unavailable_file(self):
+        """
+        Physical deletion can move a logically deleted payload to trash later.
+        """
+        input_file = self.input_file("sample.txt")
+        archived_file = self.archive_and_get(input_file)
+        archive_path = archived_file.path
+        first_delete = self.engine.delete_files(file_uuids=[archived_file.file_uuid])[0]
+
+        physical_delete = self.engine.delete_files(file_uuids=[archived_file.file_uuid], physical_delete=True)
+        queued = self.engine.query.get_files_to_be_removed(file_uuids={"filter": [archived_file.file_uuid], "op": "in"})
+
+        assert first_delete.available is False
+        assert os.path.exists(archive_path) is False
+        assert len(physical_delete) == 1
+        assert physical_delete[0].file_uuid == archived_file.file_uuid
+        assert len(queued) == 1
+        assert os.path.exists(queued[0].path)
+        assert "trash" in queued[0].path.split(os.sep)
 
     def test_delete_physical_marks_missing_payload_not_physically_available(self):
         """

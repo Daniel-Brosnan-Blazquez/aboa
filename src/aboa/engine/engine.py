@@ -525,7 +525,19 @@ class Engine():
             filters = dict(filters or {})
             if file_uuids is not None:
                 filters["file_uuids"] = {"filter": file_uuids, "op": "in"}
+            if permanent_delete:
+                filters.setdefault("physically_available", {"filter": True, "op": "=="})
+            elif not physical_delete:
+                filters.setdefault("available", {"filter": True, "op": "=="})
             files = self.query.get_archived_files(**filters)
+            if physical_delete and not permanent_delete:
+                # A logical delete can leave bytes at the archive path for a
+                # later physical delete; rows already moved to trash are skipped.
+                files = [
+                    archived_file
+                    for archived_file in files
+                    if archived_file.available or os.path.exists(archived_file.path)
+                ]
             now = datetime.datetime.utcnow()
             for archived_file in files:
                 # Preserve the first logical deletion timestamp. A repeated delete
