@@ -17,12 +17,26 @@ def _isoformat(value):
     :param value: datetime value to format
     :type value: datetime.datetime or None
 
-    :return: ISO-8601 text or None
-    :rtype: str or None
+    :return: ISO-8601 text or empty string
+    :rtype: str
     """
     if value is None:
-        return None
+        return ""
     return value.isoformat()
+
+
+def _stringify(value):
+    """
+    Format optional scalar values for JSON serialization.
+
+    :param value: scalar value to format
+
+    :return: text value or empty string
+    :rtype: str
+    """
+    if value is None:
+        return ""
+    return str(value)
 
 
 class ArchiveRootDirectory(Base):
@@ -65,11 +79,11 @@ class ArchiveRootDirectory(Base):
         :rtype: dict
         """
         return {
-            "root_directory_uuid": str(self.root_directory_uuid),
-            "path": self.path,
+            "root_directory_uuid": _stringify(self.root_directory_uuid),
+            "path": _stringify(self.path),
             "active_from": _isoformat(self.active_from),
             "active_until": _isoformat(self.active_until),
-            "active": self.active,
+            "active": _stringify(self.active),
         }
 
 
@@ -126,12 +140,12 @@ class ArchiveConfiguration(Base):
         :rtype: dict
         """
         return {
-            "archive_configuration_uuid": str(self.archive_configuration_uuid),
-            "path": self.path,
+            "archive_configuration_uuid": _stringify(self.archive_configuration_uuid),
+            "path": _stringify(self.path),
             "active_from": _isoformat(self.active_from),
             "active_until": _isoformat(self.active_until),
-            "active": self.active,
-            "content": self.content,
+            "active": _stringify(self.active),
+            "content": _stringify(self.content),
         }
 
 
@@ -223,8 +237,14 @@ class ArchivedFile(Base):
         self.available = available
         self.physically_available = physically_available
         self.rootDirectory = root_directory
+        if root_directory is not None:
+            self.root_directory_uuid = str(root_directory.root_directory_uuid)
         self.archiveConfiguration = archive_configuration
+        if archive_configuration is not None:
+            self.archive_configuration_uuid = str(archive_configuration.archive_configuration_uuid)
         self.deleteArchiveConfiguration = delete_archive_configuration
+        if delete_archive_configuration is not None:
+            self.delete_archive_configuration_uuid = str(delete_archive_configuration.archive_configuration_uuid)
         self.last_access_date = last_access_date
         self.file_group = file_group
         self.file_type = file_type
@@ -246,29 +266,29 @@ class ArchivedFile(Base):
         :rtype: dict
         """
         return {
-            "file_uuid": str(self.file_uuid),
-            "name": self.name,
-            "path": self.path,
+            "file_uuid": _stringify(self.file_uuid),
+            "name": _stringify(self.name),
+            "path": _stringify(self.path),
             "reception_date": _isoformat(self.reception_date),
             "archive_date": _isoformat(self.archive_date),
-            "file_size": self.file_size,
-            "available": self.available,
-            "physically_available": self.physically_available,
-            "root_directory_uuid": str(self.root_directory_uuid),
-            "archive_configuration_uuid": str(self.archive_configuration_uuid) if self.archive_configuration_uuid else None,
-            "delete_archive_configuration_uuid": str(self.delete_archive_configuration_uuid) if self.delete_archive_configuration_uuid else None,
+            "file_size": _stringify(self.file_size),
+            "available": _stringify(self.available),
+            "physically_available": _stringify(self.physically_available),
+            "root_directory_uuid": _stringify(self.root_directory_uuid),
+            "archive_configuration_uuid": _stringify(self.archive_configuration_uuid),
+            "delete_archive_configuration_uuid": _stringify(self.delete_archive_configuration_uuid),
             "last_access_date": _isoformat(self.last_access_date),
-            "file_group": self.file_group,
-            "file_type": self.file_type,
-            "file_class": self.file_class,
-            "file_version": self.file_version,
+            "file_group": _stringify(self.file_group),
+            "file_type": _stringify(self.file_type),
+            "file_class": _stringify(self.file_class),
+            "file_version": _stringify(self.file_version),
             "validity_start_date": _isoformat(self.validity_start_date),
             "validity_stop_date": _isoformat(self.validity_stop_date),
             "generation_date": _isoformat(self.generation_date),
             "expiration_date": _isoformat(self.expiration_date),
             "removal_date": _isoformat(self.removal_date),
-            "removal_justification": self.removal_justification,
-            "checksum": self.checksum,
+            "removal_justification": _stringify(self.removal_justification),
+            "checksum": _stringify(self.checksum),
         }
 
 
@@ -307,8 +327,12 @@ class FileToBeRemoved(Base):
         """
         self.file_to_remove_uuid = str(file_to_remove_uuid)
         self.archivedFile = archived_file
+        if archived_file is not None:
+            self.file_uuid = str(archived_file.file_uuid)
         self.path = path
         self.rootDirectory = root_directory
+        if root_directory is not None:
+            self.root_directory_uuid = str(root_directory.root_directory_uuid)
         self.removal_date = removal_date
 
     def jsonify(self):
@@ -319,10 +343,10 @@ class FileToBeRemoved(Base):
         :rtype: dict
         """
         return {
-            "file_to_remove_uuid": str(self.file_to_remove_uuid),
-            "file_uuid": str(self.file_uuid),
-            "path": self.path,
-            "root_directory_uuid": str(self.root_directory_uuid),
+            "file_to_remove_uuid": _stringify(self.file_to_remove_uuid),
+            "file_uuid": _stringify(self.file_uuid),
+            "path": _stringify(self.path),
+            "root_directory_uuid": _stringify(self.root_directory_uuid),
             "removal_date": _isoformat(self.removal_date),
         }
 
@@ -363,6 +387,8 @@ class ArchiveOperation(Base):
         self.status = status
         self.message = message
         self.archivedFile = archived_file
+        if archived_file is not None:
+            self.file_uuid = str(archived_file.file_uuid)
 
     def jsonify(self):
         """
@@ -372,10 +398,10 @@ class ArchiveOperation(Base):
         :rtype: dict
         """
         return {
-            "operation_uuid": str(self.operation_uuid),
-            "operation": self.operation,
+            "operation_uuid": _stringify(self.operation_uuid),
+            "operation": _stringify(self.operation),
             "time_stamp": _isoformat(self.time_stamp),
-            "status": self.status,
-            "message": self.message,
-            "file_uuid": str(self.file_uuid) if self.file_uuid else "",
+            "status": _stringify(self.status),
+            "message": _stringify(self.message),
+            "file_uuid": _stringify(self.file_uuid),
         }

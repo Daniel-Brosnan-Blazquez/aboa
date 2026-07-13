@@ -101,9 +101,9 @@ class TestDatamodel(unittest.TestCase):
         assert structure["file_group"] == "group_a"
         assert structure["file_type"] == "text"
         assert structure["archive_date"] == "2026-07-02T10:01:00"
-        assert structure["file_size"] == 10
-        assert structure["available"] is False
-        assert structure["physically_available"] is False
+        assert structure["file_size"] == "10"
+        assert structure["available"] == "False"
+        assert structure["physically_available"] == "False"
         assert structure["archive_configuration_uuid"] == str(self.archive_configuration.archive_configuration_uuid)
         assert structure["delete_archive_configuration_uuid"] == str(self.delete_archive_configuration.archive_configuration_uuid)
         assert structure["last_access_date"] == "2026-07-02T10:02:00"
@@ -121,7 +121,7 @@ class TestDatamodel(unittest.TestCase):
 
     def test_archived_file_jsonify_handles_optional_values(self):
         """
-        Serialize missing optional archived-file metadata as null values.
+        Serialize missing optional archived-file metadata as empty strings.
         """
         archived_file = ArchivedFile(
             uuid.uuid4(),
@@ -135,22 +135,22 @@ class TestDatamodel(unittest.TestCase):
 
         structure = archived_file.jsonify()
 
-        assert structure["available"] is True
-        assert structure["physically_available"] is True
-        assert structure["archive_configuration_uuid"] is None
-        assert structure["delete_archive_configuration_uuid"] is None
-        assert structure["last_access_date"] is None
-        assert structure["file_group"] is None
-        assert structure["file_type"] is None
-        assert structure["file_class"] is None
-        assert structure["file_version"] is None
-        assert structure["validity_start_date"] is None
-        assert structure["validity_stop_date"] is None
-        assert structure["generation_date"] is None
-        assert structure["expiration_date"] is None
-        assert structure["removal_date"] is None
-        assert structure["removal_justification"] is None
-        assert structure["checksum"] is None
+        assert structure["available"] == "True"
+        assert structure["physically_available"] == "True"
+        assert structure["archive_configuration_uuid"] == ""
+        assert structure["delete_archive_configuration_uuid"] == ""
+        assert structure["last_access_date"] == ""
+        assert structure["file_group"] == ""
+        assert structure["file_type"] == ""
+        assert structure["file_class"] == ""
+        assert structure["file_version"] == ""
+        assert structure["validity_start_date"] == ""
+        assert structure["validity_stop_date"] == ""
+        assert structure["generation_date"] == ""
+        assert structure["expiration_date"] == ""
+        assert structure["removal_date"] == ""
+        assert structure["removal_justification"] == ""
+        assert structure["checksum"] == ""
 
     def test_archive_root_directory_jsonify(self):
         """
@@ -172,7 +172,7 @@ class TestDatamodel(unittest.TestCase):
             "path": "/tmp/archive",
             "active_from": "2026-07-02T09:00:00",
             "active_until": "2026-07-03T09:00:00",
-            "active": False,
+            "active": "False",
         }
 
     def test_archive_configuration_jsonify(self):
@@ -197,7 +197,7 @@ class TestDatamodel(unittest.TestCase):
             "path": "/tmp/config/archive_configurations.xml",
             "active_from": "2026-07-02T09:00:00",
             "active_until": "2026-07-03T09:00:00",
-            "active": False,
+            "active": "False",
             "content": content,
         }
 
@@ -220,7 +220,7 @@ class TestDatamodel(unittest.TestCase):
             "operation_uuid": str(operation_uuid),
             "operation": "archive",
             "time_stamp": "2026-07-02T10:05:00",
-            "status": 1,
+            "status": "1",
             "message": "processor failed",
             "file_uuid": "",
         }

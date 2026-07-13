@@ -265,7 +265,7 @@ class TestCli(unittest.TestCase):
 
         assert len(recover_output) == 1
         assert recover_output[0]["file_uuid"] == str(file_uuid)
-        assert recover_output[0]["available"] is True
+        assert recover_output[0]["available"] == "True"
         assert Path(archive_path).exists()
         assert not Path(trash_path).exists()
 
@@ -294,10 +294,10 @@ class TestCli(unittest.TestCase):
 
         assert len(list_output) == 1
         assert list_output[0]["file_uuid"] == str(file_uuid)
-        assert list_output[0]["available"] is False
+        assert list_output[0]["available"] == "False"
         assert len(recover_output) == 1
         assert recover_output[0]["file_uuid"] == str(file_uuid)
-        assert recover_output[0]["available"] is True
+        assert recover_output[0]["available"] == "True"
         assert Path(archive_path).exists()
         assert queued == []
 
