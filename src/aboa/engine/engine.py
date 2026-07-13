@@ -602,11 +602,13 @@ class Engine():
 
     def recover_files_from_trash(self, filters=None, file_uuids=None, file_to_remove_uuids=None):
         """
-        Recover physically deleted archive payloads from trash.
+        Recover deleted archive payloads from trash or logical-only removal.
 
         Recovery moves each queued trash payload back to its original archive
         path, marks the archived file available again, and removes the pending
-        final-removal row. Existing archive-path payloads are never overwritten.
+        final-removal row. Files that were only logically removed are marked
+        available again when their payload still exists at the original archive
+        path. Existing archive-path payloads are never overwritten.
 
         :param filters: query filters accepted by ``Query.get_files_to_be_removed``
         :type filters: dict or None
@@ -629,10 +631,13 @@ class Engine():
 
             rows = self.query.get_files_to_be_removed(**filters)
             recovered_files = []
+            recovered_file_uuids = set()
             failures = []
             for file_to_be_removed in rows:
                 try:
-                    recovered_files.append(self._recover_file_from_trash(file_to_be_removed))
+                    recovered_file = self._recover_file_from_trash(file_to_be_removed)
+                    recovered_files.append(recovered_file)
+                    recovered_file_uuids.add(recovered_file.file_uuid)
                 except Exception as exc:
                     message = "file {}: {}".format(file_to_be_removed.path, exc)
                     logger.error(message)
@@ -641,6 +646,24 @@ class Engine():
                         exit_codes["RECOVERY_FAILED"]["status"],
                         exit_codes["RECOVERY_FAILED"]["message"].format(message),
                         file_to_be_removed.archivedFile,
+                    )
+                    failures.append(message)
+
+            for archived_file in self._get_logically_deleted_files_for_recovery(filters=filters):
+                if archived_file.file_uuid in recovered_file_uuids:
+                    continue
+                try:
+                    recovered_file = self._recover_logically_deleted_file(archived_file)
+                    recovered_files.append(recovered_file)
+                    recovered_file_uuids.add(recovered_file.file_uuid)
+                except Exception as exc:
+                    message = "file {}: {}".format(archived_file.path, exc)
+                    logger.error(message)
+                    self.record_failure(
+                        "recover",
+                        exit_codes["RECOVERY_FAILED"]["status"],
+                        exit_codes["RECOVERY_FAILED"]["message"].format(message),
+                        archived_file,
                     )
                     failures.append(message)
 
@@ -659,6 +682,25 @@ class Engine():
             self.record_failure("recover", exit_codes["RECOVERY_FAILED"]["status"], message)
             self.session.commit()
             raise ArchiveRecoveryError(message) from exc
+
+    def get_logically_deleted_recoverable_files(self, filters=None, file_uuids=None):
+        """
+        Return logical-only deleted files whose payload is still at its archive path.
+
+        :param filters: recover filters; only file UUID filters can match
+            logical-only removals
+        :type filters: dict or None
+        :param file_uuids: optional archived-file UUIDs to inspect
+        :type file_uuids: list or None
+
+        :return: logically deleted archived-file rows that can be recovered
+        :rtype: list
+        """
+        return self._get_logically_deleted_files_for_recovery(
+            filters=filters,
+            file_uuids=file_uuids,
+            require_payload=True,
+        )
 
     def _match_configuration(self, file_path):
         """
@@ -1221,6 +1263,44 @@ class Engine():
         archived_file.physically_available = physically_available
         return physically_available
 
+    def _build_logical_recovery_filters(self, filters=None, file_uuids=None):
+        """
+        Build archived-file filters for logical-only recovery.
+
+        Recover filters are normally trash-queue filters. Logical-only recovery
+        can only share the archived-file UUID filter, so trash-specific filters
+        deliberately do not match logical-only removals.
+        """
+        filters = dict(filters or {})
+        if file_uuids is not None:
+            filters["file_uuids"] = {"filter": file_uuids, "op": "in"}
+
+        if any(filter_name != "file_uuids" for filter_name in filters):
+            return None
+
+        logical_filters = {"available": {"filter": False, "op": "=="}}
+        if "file_uuids" in filters:
+            logical_filters["file_uuids"] = filters["file_uuids"]
+        return logical_filters
+
+    def _get_logically_deleted_files_for_recovery(self, filters=None, file_uuids=None, require_payload=False):
+        """
+        Return logically deleted files that are not queued for trash recovery.
+        """
+        logical_filters = self._build_logical_recovery_filters(filters=filters, file_uuids=file_uuids)
+        if logical_filters is None:
+            return []
+
+        files = self.query.get_archived_files(**logical_filters)
+        candidates = []
+        for archived_file in files:
+            if self._get_file_to_be_removed(archived_file) is not None:
+                continue
+            if require_payload and not os.path.exists(archived_file.path):
+                continue
+            candidates.append(archived_file)
+        return candidates
+
     def _delete_archived_file_entry(self, archived_file):
         """
         Delete an archived-file inventory row after confirming no payload remains.
@@ -1313,6 +1393,38 @@ class Engine():
         if archived_file.expiration_date is not None and archived_file.deleteArchiveConfiguration is None:
             archived_file.deleteArchiveConfiguration = archived_file.archiveConfiguration
         self.session.delete(file_to_be_removed)
+        return archived_file
+
+    def _recover_logically_deleted_file(self, archived_file):
+        """
+        Mark a logical-only deleted archived file available again.
+
+        :param archived_file: archived-file row to recover
+        :type archived_file: aboa.datamodel.archived_files.ArchivedFile
+
+        :return: recovered archived-file entity
+        :rtype: aboa.datamodel.archived_files.ArchivedFile
+
+        :raises ArchiveRecoveryError: when the payload is not available at the
+            original archive path or the file is queued for trash recovery
+        """
+        if archived_file is None:
+            raise ArchiveRecoveryError("The archived file row does not exist")
+        if archived_file.available:
+            raise ArchiveRecoveryError("The archived file {} is already available".format(archived_file.file_uuid))
+        if self._get_file_to_be_removed(archived_file) is not None:
+            raise ArchiveRecoveryError("The archived file {} is queued for trash recovery".format(archived_file.file_uuid))
+        if not os.path.exists(archived_file.path):
+            self._sync_physical_availability(archived_file)
+            raise ArchiveRecoveryError("The archive payload {} does not exist".format(archived_file.path))
+
+        archived_file.available = True
+        archived_file.physically_available = True
+        archived_file.removal_date = None
+        archived_file.removal_justification = None
+        archived_file.file_size = os.path.getsize(archived_file.path)
+        if archived_file.expiration_date is not None and archived_file.deleteArchiveConfiguration is None:
+            archived_file.deleteArchiveConfiguration = archived_file.archiveConfiguration
         return archived_file
 
     def _store_file(self, source_path, destination_path):

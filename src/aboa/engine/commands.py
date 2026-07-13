@@ -8,7 +8,7 @@ import argparse
 import json
 import os
 
-from aboa.engine.errors import ArchiveDeletionError, ArchiveFileError
+from aboa.engine.errors import ArchiveDeletionError, ArchiveFileError, ArchiveRecoveryError
 from aboa.engine.engine import Engine
 from aboa.engine.operators import arithmetic_operators, text_operators
 from aboa.engine.query import Query
@@ -489,15 +489,23 @@ def _build_recover_filters(args, parser, query):
     return trash_filters
 
 
-def _jsonify_recover_candidates(rows):
+def _jsonify_recover_candidates(rows, logical_files=None):
     """
-    Serialize archived files linked to pending final-removal rows.
+    Serialize archived files that can be recovered from trash or logical delete.
     """
-    files = [
-        row.archivedFile
-        for row in rows
-        if row.archivedFile is not None
-    ]
+    files = []
+    seen_file_uuids = set()
+    for row in rows:
+        archived_file = row.archivedFile
+        if archived_file is None or archived_file.file_uuid in seen_file_uuids:
+            continue
+        files.append(archived_file)
+        seen_file_uuids.add(archived_file.file_uuid)
+    for archived_file in logical_files or []:
+        if archived_file.file_uuid in seen_file_uuids:
+            continue
+        files.append(archived_file)
+        seen_file_uuids.add(archived_file.file_uuid)
     return _jsonify_rows(files)
 
 
@@ -663,9 +671,9 @@ def aboa_delete():
 
 def aboa_recover():
     """
-    Command line entry point for recovering files from trash.
+    Command line entry point for recovering logically or physically deleted files.
     """
-    parser = argparse.ArgumentParser(description="Recover ABOA files from trash")
+    parser = argparse.ArgumentParser(description="Recover deleted ABOA files")
     _add_archived_file_filter_arguments(parser)
     _add_trash_filter_arguments(parser)
     parser.add_argument(
@@ -673,7 +681,7 @@ def aboa_recover():
         "--list",
         action="store_true",
         dest="list_files",
-        help="list matching recoverable files without moving payloads out of trash",
+        help="list matching recoverable files without changing archive payloads",
     )
     args = parser.parse_args()
 
@@ -686,13 +694,17 @@ def aboa_recover():
 
         if args.list_files:
             rows = engine.query.get_files_to_be_removed(**filters)
-            _print_json(_jsonify_recover_candidates(rows))
-            logger.info("Recover command listed {} candidate file/s".format(len(rows)))
+            logical_files = engine.get_logically_deleted_recoverable_files(filters=filters)
+            _print_json(_jsonify_recover_candidates(rows, logical_files))
+            logger.info("Recover command listed {} candidate file/s".format(len(rows) + len(logical_files)))
             return
 
         files = engine.recover_files_from_trash(filters=filters)
         _print_json(_jsonify_rows(files))
         logger.info("Recover command completed on {} file/s".format(len(files)))
+    except ArchiveRecoveryError as exc:
+        logger.error("Recover command failed: {}".format(exc))
+        _exit_with_error(parser, exc)
     finally:
         engine.close_session()
 

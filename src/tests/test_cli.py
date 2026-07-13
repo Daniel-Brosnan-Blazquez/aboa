@@ -240,6 +240,38 @@ class TestCli(unittest.TestCase):
         assert Path(archive_path).exists()
         assert not Path(trash_path).exists()
 
+    def test_cli_recover_logically_deleted_file(self):
+        """
+        Recover a logical-only deleted file through the CLI.
+        """
+        input_file = self.input_file("sample.txt")
+        archived_file = self.archive_and_get(input_file)
+        file_uuid = archived_file.file_uuid
+        archive_path = archived_file.path
+        self.engine.delete_files(file_uuids=[file_uuid])
+
+        sys.argv = ["aboa_recover", "--uuid", str(file_uuid), "--list"]
+        list_stdout = io.StringIO()
+        with contextlib.redirect_stdout(list_stdout):
+            aboa_recover()
+        list_output = json.loads(list_stdout.getvalue())
+
+        sys.argv = ["aboa_recover", "--uuid", str(file_uuid)]
+        recover_stdout = io.StringIO()
+        with contextlib.redirect_stdout(recover_stdout):
+            aboa_recover()
+        recover_output = json.loads(recover_stdout.getvalue())
+        queued = self.engine.query.get_files_to_be_removed(file_uuids={"filter": [file_uuid], "op": "in"})
+
+        assert len(list_output) == 1
+        assert list_output[0]["file_uuid"] == str(file_uuid)
+        assert list_output[0]["available"] is False
+        assert len(recover_output) == 1
+        assert recover_output[0]["file_uuid"] == str(file_uuid)
+        assert recover_output[0]["available"] is True
+        assert Path(archive_path).exists()
+        assert queued == []
+
     def test_cli_recover_can_list_and_filter_by_archived_metadata(self):
         """
         Recover command accepts archived-file metadata filters for candidate lookup.

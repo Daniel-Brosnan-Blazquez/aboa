@@ -521,6 +521,30 @@ class TestEngine(unittest.TestCase):
         assert not os.path.exists(trash_path)
         assert remaining == []
 
+    def test_recover_logically_deleted_file_without_trash(self):
+        """
+        Mark a logical-only deleted file available again without moving bytes.
+        """
+        input_file = self.input_file("sample.txt")
+        archived_file = self.archive_and_get(input_file)
+        archive_path = archived_file.path
+        self.engine.delete_files(file_uuids=[archived_file.file_uuid])
+        queued = self.engine.query.get_files_to_be_removed(file_uuids={"filter": [archived_file.file_uuid], "op": "in"})
+
+        recovered = self.engine.recover_files_from_trash(file_uuids=[archived_file.file_uuid])
+        remaining = self.engine.query.get_files_to_be_removed(file_uuids={"filter": [archived_file.file_uuid], "op": "in"})
+
+        assert queued == []
+        assert len(recovered) == 1
+        assert recovered[0].file_uuid == archived_file.file_uuid
+        assert recovered[0].available is True
+        assert recovered[0].physically_available is True
+        assert recovered[0].removal_date is None
+        assert recovered[0].removal_justification is None
+        assert recovered[0].path == archive_path
+        assert os.path.exists(archive_path)
+        assert remaining == []
+
     def test_recover_files_from_trash_failure_is_recorded(self):
         """
         Record a recovery failure and leave the trash row queued for inspection.
