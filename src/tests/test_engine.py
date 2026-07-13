@@ -545,6 +545,77 @@ class TestEngine(unittest.TestCase):
         assert os.path.exists(archive_path)
         assert remaining == []
 
+    def test_recover_recalculates_expiration_from_current_configuration(self):
+        """
+        Recovery applies the active retention policy like a fresh archive.
+        """
+        input_file = self.input_file("sample.txt")
+        recovery_configuration = str(self.inputs_path / "engine_archive_recovery_future_configuration.xml")
+        original_expiration_date = datetime.datetime.utcnow() - datetime.timedelta(days=1)
+        archived_file = self.archive_and_get(input_file, metadata={"expiration_date": original_expiration_date})
+        self.engine.delete_files(file_uuids=[archived_file.file_uuid], physical_delete=True)
+        self.engine.set_configuration_path(recovery_configuration)
+
+        before_recovery = datetime.datetime.utcnow()
+        recovered = self.engine.recover_files_from_trash(file_uuids=[archived_file.file_uuid])
+        after_recovery = datetime.datetime.utcnow()
+
+        assert len(recovered) == 1
+        assert recovered[0].expiration_date > original_expiration_date
+        assert before_recovery + datetime.timedelta(days=2) <= recovered[0].expiration_date
+        assert recovered[0].expiration_date <= after_recovery + datetime.timedelta(days=2)
+        assert recovered[0].deleteArchiveConfiguration is not None
+        assert recovered[0].deleteArchiveConfiguration.path == recovery_configuration
+
+    def test_recover_keeps_existing_future_expiration(self):
+        """
+        Recovery preserves a previous expiration date that is still in the future.
+        """
+        input_file = self.input_file("sample.txt")
+        recovery_configuration = str(self.inputs_path / "engine_archive_recovery_past_generation_configuration.xml")
+        future_expiration_date = datetime.datetime(2099, 12, 31, 23, 59, 59)
+        old_generation_date = datetime.datetime.utcnow() - datetime.timedelta(days=10)
+        archived_file = self.archive_and_get(
+            input_file,
+            metadata={
+                "expiration_date": future_expiration_date,
+                "generation_date": old_generation_date,
+            },
+        )
+        self.engine.delete_files(file_uuids=[archived_file.file_uuid], physical_delete=True)
+        self.engine.set_configuration_path(recovery_configuration)
+
+        recovered = self.engine.recover_files_from_trash(file_uuids=[archived_file.file_uuid])
+
+        assert len(recovered) == 1
+        assert recovered[0].expiration_date == future_expiration_date
+        assert recovered[0].deleteArchiveConfiguration is not None
+        assert recovered[0].deleteArchiveConfiguration.path == self.configuration_file
+
+    def test_recover_clears_expiration_when_current_retention_is_not_future(self):
+        """
+        Recovery leaves expiration empty when current retention has already expired.
+        """
+        input_file = self.input_file("sample.txt")
+        recovery_configuration = str(self.inputs_path / "engine_archive_recovery_past_generation_configuration.xml")
+        old_generation_date = datetime.datetime.utcnow() - datetime.timedelta(days=10)
+        old_expiration_date = datetime.datetime.utcnow() - datetime.timedelta(days=1)
+        archived_file = self.archive_and_get(
+            input_file,
+            metadata={
+                "expiration_date": old_expiration_date,
+                "generation_date": old_generation_date,
+            },
+        )
+        self.engine.delete_files(file_uuids=[archived_file.file_uuid])
+        self.engine.set_configuration_path(recovery_configuration)
+
+        recovered = self.engine.recover_files_from_trash(file_uuids=[archived_file.file_uuid])
+
+        assert len(recovered) == 1
+        assert recovered[0].expiration_date is None
+        assert recovered[0].deleteArchiveConfiguration is None
+
     def test_recover_files_from_trash_failure_is_recorded(self):
         """
         Record a recovery failure and leave the trash row queued for inspection.

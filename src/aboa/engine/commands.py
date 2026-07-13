@@ -5,11 +5,13 @@ module aboa
 """
 
 import argparse
+import datetime
 import json
 import os
 
 from aboa.engine.errors import ArchiveDeletionError, ArchiveFileError, ArchiveRecoveryError
 from aboa.engine.engine import Engine
+from aboa.engine.functions import parse_datetime
 from aboa.engine.operators import arithmetic_operators, text_operators
 from aboa.engine.query import Query
 from aboa.engine.retention import apply_final_removal, apply_retention
@@ -270,6 +272,29 @@ def _parse_bool_filter(raw_value):
     return bool_filter
 
 
+def _parse_datetime_argument(raw_value):
+    """
+    Parse a CLI datetime argument.
+    """
+    try:
+        parsed_datetime = parse_datetime(raw_value)
+    except Exception as exc:
+        raise argparse.ArgumentTypeError("{} is not a valid datetime".format(raw_value)) from exc
+    if parsed_datetime.tzinfo is not None and parsed_datetime.utcoffset() is not None:
+        parsed_datetime = parsed_datetime.astimezone(datetime.timezone.utc).replace(tzinfo=None)
+    return parsed_datetime
+
+
+def _parse_future_datetime_argument(raw_value):
+    """
+    Parse a CLI datetime argument that must be in the future.
+    """
+    parsed_datetime = _parse_datetime_argument(raw_value)
+    if parsed_datetime <= datetime.datetime.utcnow():
+        raise argparse.ArgumentTypeError("{} must be in the future".format(raw_value))
+    return parsed_datetime
+
+
 def _add_text_filter_arguments(parser, filter_specs):
     """
     Add text-filter options and their operator selectors to a parser.
@@ -527,11 +552,22 @@ def aboa_archive():
         action="store_true",
         help="delete the input file after it has been archived successfully",
     )
+    parser.add_argument(
+        "-E",
+        "--expiration-date",
+        type=_parse_future_datetime_argument,
+        dest="expiration_date",
+        metavar="DATETIME",
+        help="explicit archive expiration date; overrides retention-policy calculation",
+    )
     args = parser.parse_args()
     logger.info("Archive command received for file {}".format(args.file))
     engine = Engine()
     try:
-        engine.archive_file(args.file, delete=args.delete)
+        archive_kwargs = {"delete": args.delete}
+        if args.expiration_date is not None:
+            archive_kwargs["metadata"] = {"expiration_date": args.expiration_date}
+        engine.archive_file(args.file, **archive_kwargs)
         archived_file = engine.query.get_archived_files(
             names={"filter": [os.path.basename(args.file)], "op": "in"},
             selection="last",

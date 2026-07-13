@@ -629,13 +629,15 @@ class Engine():
             if file_to_remove_uuids is not None:
                 filters["file_to_remove_uuids"] = {"filter": file_to_remove_uuids, "op": "in"}
 
+            self._load_archive_configuration(self.configuration_path)
+            recovery_date = datetime.datetime.utcnow()
             rows = self.query.get_files_to_be_removed(**filters)
             recovered_files = []
             recovered_file_uuids = set()
             failures = []
             for file_to_be_removed in rows:
                 try:
-                    recovered_file = self._recover_file_from_trash(file_to_be_removed)
+                    recovered_file = self._recover_file_from_trash(file_to_be_removed, recovery_date=recovery_date)
                     recovered_files.append(recovered_file)
                     recovered_file_uuids.add(recovered_file.file_uuid)
                 except Exception as exc:
@@ -653,7 +655,7 @@ class Engine():
                 if archived_file.file_uuid in recovered_file_uuids:
                     continue
                 try:
-                    recovered_file = self._recover_logically_deleted_file(archived_file)
+                    recovered_file = self._recover_logically_deleted_file(archived_file, recovery_date=recovery_date)
                     recovered_files.append(recovered_file)
                     recovered_file_uuids.add(recovered_file.file_uuid)
                 except Exception as exc:
@@ -1301,6 +1303,52 @@ class Engine():
             candidates.append(archived_file)
         return candidates
 
+    def _metadata_from_archived_file(self, archived_file):
+        """
+        Build retention metadata from an existing archived-file row.
+        """
+        return {
+            "file_group": archived_file.file_group,
+            "file_type": archived_file.file_type,
+            "file_class": archived_file.file_class,
+            "file_version": archived_file.file_version,
+            "validity_start_date": archived_file.validity_start_date,
+            "validity_stop_date": archived_file.validity_stop_date,
+            "generation_date": archived_file.generation_date,
+        }
+
+    def _refresh_recovered_file_expiration(self, archived_file, recovery_date):
+        """
+        Refresh expiration for a recovered file.
+
+        A previous future expiration keeps its original schedule. Otherwise,
+        recovery calculates expiration from the current archive configuration as
+        if the file had just been archived again.
+        """
+        previous_expiration_date = parse_datetime(archived_file.expiration_date)
+        if previous_expiration_date is not None and previous_expiration_date > recovery_date:
+            archived_file.expiration_date = previous_expiration_date
+            if archived_file.deleteArchiveConfiguration is None:
+                archived_file.deleteArchiveConfiguration = (
+                    archived_file.archiveConfiguration
+                    or self.query.get_active_archive_configuration()
+                )
+            return
+
+        configuration = self._match_configuration(archived_file.name or archived_file.path)
+        expiration_date = self._calculate_expiration_date(
+            configuration,
+            recovery_date,
+            recovery_date,
+            self._metadata_from_archived_file(archived_file),
+        )
+        if expiration_date is not None and expiration_date > recovery_date:
+            archived_file.expiration_date = expiration_date
+            archived_file.deleteArchiveConfiguration = self.query.get_active_archive_configuration()
+        else:
+            archived_file.expiration_date = None
+            archived_file.deleteArchiveConfiguration = None
+
     def _delete_archived_file_entry(self, archived_file):
         """
         Delete an archived-file inventory row after confirming no payload remains.
@@ -1357,12 +1405,14 @@ class Engine():
         base, extension = os.path.splitext(trash_name)
         return os.path.join(directory, "{}_{}{}".format(base, archived_file.file_uuid, extension))
 
-    def _recover_file_from_trash(self, file_to_be_removed):
+    def _recover_file_from_trash(self, file_to_be_removed, recovery_date=None):
         """
         Move one pending trash payload back to its archived path.
 
         :param file_to_be_removed: trash-queue row to recover
         :type file_to_be_removed: aboa.datamodel.archived_files.FileToBeRemoved
+        :param recovery_date: timestamp used to recalculate retention
+        :type recovery_date: datetime.datetime or None
 
         :return: recovered archived-file entity
         :rtype: aboa.datamodel.archived_files.ArchivedFile
@@ -1390,17 +1440,18 @@ class Engine():
         archived_file.removal_date = None
         archived_file.removal_justification = None
         archived_file.file_size = os.path.getsize(archived_file.path)
-        if archived_file.expiration_date is not None and archived_file.deleteArchiveConfiguration is None:
-            archived_file.deleteArchiveConfiguration = archived_file.archiveConfiguration
+        self._refresh_recovered_file_expiration(archived_file, recovery_date or datetime.datetime.utcnow())
         self.session.delete(file_to_be_removed)
         return archived_file
 
-    def _recover_logically_deleted_file(self, archived_file):
+    def _recover_logically_deleted_file(self, archived_file, recovery_date=None):
         """
         Mark a logical-only deleted archived file available again.
 
         :param archived_file: archived-file row to recover
         :type archived_file: aboa.datamodel.archived_files.ArchivedFile
+        :param recovery_date: timestamp used to recalculate retention
+        :type recovery_date: datetime.datetime or None
 
         :return: recovered archived-file entity
         :rtype: aboa.datamodel.archived_files.ArchivedFile
@@ -1423,8 +1474,7 @@ class Engine():
         archived_file.removal_date = None
         archived_file.removal_justification = None
         archived_file.file_size = os.path.getsize(archived_file.path)
-        if archived_file.expiration_date is not None and archived_file.deleteArchiveConfiguration is None:
-            archived_file.deleteArchiveConfiguration = archived_file.archiveConfiguration
+        self._refresh_recovered_file_expiration(archived_file, recovery_date or datetime.datetime.utcnow())
         return archived_file
 
     def _store_file(self, source_path, destination_path):

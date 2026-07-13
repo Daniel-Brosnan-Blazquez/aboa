@@ -150,6 +150,50 @@ class TestCli(unittest.TestCase):
         assert archive_output["name"] == "sample.txt"
         assert len(retrieve_output) == 1
 
+    def test_cli_archive_accepts_expiration_date(self):
+        """
+        Archive command accepts an explicit expiration date metadata value.
+        """
+        input_file = self.input_file("sample.txt")
+
+        sys.argv = [
+            "aboa_archive",
+            "--file",
+            str(input_file),
+            "--expiration-date",
+            "2099-12-31T23:59:59",
+        ]
+        archive_stdout = io.StringIO()
+        with contextlib.redirect_stdout(archive_stdout):
+            aboa_archive()
+        archive_output = json.loads(archive_stdout.getvalue())
+
+        assert archive_output["expiration_date"] == "2099-12-31T23:59:59"
+        assert archive_output["delete_archive_configuration_uuid"] is not None
+
+    def test_cli_archive_rejects_non_future_expiration_date(self):
+        """
+        Archive command rejects explicit expiration dates that are not future.
+        """
+        input_file = self.input_file("sample.txt")
+
+        sys.argv = [
+            "aboa_archive",
+            "--file",
+            str(input_file),
+            "--expiration-date",
+            "2000-01-01T00:00:00",
+        ]
+        stderr = io.StringIO()
+        with contextlib.redirect_stderr(stderr):
+            with self.assertRaises(SystemExit) as context:
+                aboa_archive()
+        archived_files = self.engine.query.get_archived_files()
+
+        assert context.exception.code == 2
+        assert "must be in the future" in stderr.getvalue()
+        assert archived_files == []
+
     def test_cli_retrieve_can_list_and_copy_to_destination(self):
         """
         List retrieval candidates without access updates, then copy them to a folder.
