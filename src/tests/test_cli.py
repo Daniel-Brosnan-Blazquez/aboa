@@ -11,7 +11,7 @@ import unittest
 from pathlib import Path
 
 from aboa.engine import commands as commands_module
-from aboa.engine.commands import aboa_archive, aboa_delete, aboa_recover, aboa_retrieve
+from aboa.engine.commands import aboa_archive, aboa_clean_up, aboa_delete, aboa_recover, aboa_retrieve
 from aboa.engine.engine import Engine
 from aboa.engine.errors import ArchiveDeletionError, ArchiveFileError
 from aboa.engine.query import Query
@@ -331,3 +331,31 @@ class TestCli(unittest.TestCase):
         assert len(recover_output) == 1
         assert recover_output[0]["file_uuid"] == str(archived_file.file_uuid)
         assert Path(archive_path).exists()
+
+    def test_cli_clean_up_can_empty_trash_immediately(self):
+        """
+        Empty all queued trash payloads through the clean-up CLI.
+        """
+        input_file = self.input_file("sample.txt")
+        archived_file = self.archive_and_get(input_file)
+        file_uuid = archived_file.file_uuid
+        self.engine.delete_files(file_uuids=[file_uuid], physical_delete=True)
+        queued = self.engine.query.get_files_to_be_removed(file_uuids={"filter": [file_uuid], "op": "in"})[0]
+        trash_path = queued.path
+        trash_uuid = queued.file_to_remove_uuid
+
+        sys.argv = ["aboa_clean_up", "--empty-trash"]
+        cleanup_stdout = io.StringIO()
+        with contextlib.redirect_stdout(cleanup_stdout):
+            aboa_clean_up()
+        cleanup_output = json.loads(cleanup_stdout.getvalue())
+        query = Query()
+        remaining = query.get_files_to_be_removed(file_uuids={"filter": [file_uuid], "op": "in"})
+        refreshed_file = query.get_archived_files(file_uuids={"filter": [file_uuid], "op": "in"})[0]
+        query.close_session()
+
+        assert len(cleanup_output) == 1
+        assert cleanup_output[0]["file_to_remove_uuid"] == str(trash_uuid)
+        assert remaining == []
+        assert refreshed_file.physically_available is False
+        assert not Path(trash_path).exists()

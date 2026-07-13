@@ -53,9 +53,9 @@ def apply_retention(engine, dry_run=False):
         raise ArchiveRetentionError(message) from exc
 
 
-def apply_final_removal(engine, dry_run=False, now=None):
+def apply_final_removal(engine, dry_run=False, now=None, empty_trash=False):
     """
-    Delete trash-queue payloads whose 30-day grace period has elapsed.
+    Delete trash-queue payloads whose grace period has elapsed.
 
     Per-file deletion failures are persisted in ``archive_operations`` and the
     corresponding trash-queue row is left in place for a later retry.
@@ -66,6 +66,8 @@ def apply_final_removal(engine, dry_run=False, now=None):
     :type dry_run: bool
     :param now: evaluation timestamp, defaulting to current UTC time
     :type now: datetime.datetime or None
+    :param empty_trash: delete every queued trash payload immediately
+    :type empty_trash: bool
 
     :return: candidate or affected pending-removal rows
     :rtype: list
@@ -73,7 +75,11 @@ def apply_final_removal(engine, dry_run=False, now=None):
     now = now or datetime.datetime.utcnow()
 
     try:
-        candidates = get_files_ready_for_final_removal(engine.session, now)
+        candidates = get_files_ready_for_final_removal(
+            engine.session,
+            now,
+            empty_trash=empty_trash,
+        )
         if dry_run:
             return candidates
 
@@ -126,25 +132,25 @@ def get_expired_files(session, now=None):
     )
 
 
-def get_files_ready_for_final_removal(session, now=None):
+def get_files_ready_for_final_removal(session, now=None, empty_trash=False):
     """
-    Return trash-queue rows whose scheduled final-removal time has arrived.
+    Return trash-queue rows selected for final physical deletion.
 
     :param session: SQLAlchemy session
     :type session: sqlalchemy.orm.session.Session
     :param now: evaluation timestamp, defaulting to current UTC time
     :type now: datetime.datetime or None
+    :param empty_trash: include every queued trash payload, ignoring removal_date
+    :type empty_trash: bool
 
     :return: pending-removal rows ready for final deletion
     :rtype: list
     """
     now = now or datetime.datetime.utcnow()
-    return (
-        session.query(FileToBeRemoved)
-        .filter(FileToBeRemoved.removal_date <= now)
-        .order_by(
-            FileToBeRemoved.removal_date.asc(),
-            FileToBeRemoved.file_to_remove_uuid.asc(),
-        )
-        .all()
-    )
+    query = session.query(FileToBeRemoved)
+    if not empty_trash:
+        query = query.filter(FileToBeRemoved.removal_date <= now)
+    return query.order_by(
+        FileToBeRemoved.removal_date.asc(),
+        FileToBeRemoved.file_to_remove_uuid.asc(),
+    ).all()

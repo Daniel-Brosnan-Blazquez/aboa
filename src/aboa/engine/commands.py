@@ -729,12 +729,21 @@ def aboa_clean_up():
         action="store_true",
         help="remove expired trash payloads instead of applying retention cleanup",
     )
+    parser.add_argument(
+        "--empty-trash",
+        action="store_true",
+        help="remove all trash payloads immediately, ignoring scheduled final-removal dates",
+    )
     args = parser.parse_args()
     logger.info("Clean-up command received")
     engine = Engine()
     try:
-        if args.final_removal:
-            rows = apply_final_removal(engine, dry_run=args.dry_run)
+        if args.final_removal or args.empty_trash:
+            rows = apply_final_removal(
+                engine,
+                dry_run=args.dry_run,
+                empty_trash=args.empty_trash,
+            )
         else:
             rows = apply_retention(engine, dry_run=args.dry_run)
         _print_json(_jsonify_rows(rows))

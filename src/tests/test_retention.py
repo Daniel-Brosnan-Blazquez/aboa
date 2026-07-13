@@ -127,6 +127,34 @@ class TestRetention(unittest.TestCase):
         assert not os.path.exists(trash_path)
         assert remaining == []
 
+    def test_final_removal_can_empty_trash_immediately(self):
+        """
+        Delete queued trash payloads before their scheduled final-removal date.
+        """
+        input_file = self.input_file("sample.txt")
+        self.archive_file(
+            input_file,
+            file_type="text",
+            expiration_date=datetime.datetime.utcnow() - datetime.timedelta(days=1),
+        )
+        apply_retention(self.engine, dry_run=False)
+        queued = self.engine.query.get_files_to_be_removed()[0]
+        trash_path = queued.path
+
+        scheduled_dry_run = apply_final_removal(self.engine, dry_run=True)
+        immediate_dry_run = apply_final_removal(self.engine, dry_run=True, empty_trash=True)
+        removed = apply_final_removal(self.engine, empty_trash=True)
+        remaining = self.engine.query.get_files_to_be_removed()
+
+        assert scheduled_dry_run == []
+        assert len(immediate_dry_run) == 1
+        assert immediate_dry_run[0].file_uuid == queued.file_uuid
+        assert len(removed) == 1
+        assert removed[0].file_uuid == queued.file_uuid
+        assert queued.archivedFile.physically_available is False
+        assert not os.path.exists(trash_path)
+        assert remaining == []
+
     def test_final_removal_failure_is_registered_for_retry(self):
         """
         Register final-removal failures and keep the queue row for retry.
