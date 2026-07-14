@@ -5,7 +5,6 @@
     "MAX_BACKUP": 30
   },
   "ARCHIVE": {
-    "TRASH_DIRECTORY": "trash",
     "FINAL_REMOVAL_DELAY_DAYS": 30
   }
 }

@@ -111,7 +111,7 @@ exit_codes = {
     },
 }
 
-DEFAULT_TRASH_DIRECTORY_NAME = "trash"
+TRASH_DIRECTORY_NAME = "trash"
 DEFAULT_FINAL_REMOVAL_DELAY_DAYS = 30
 
 
@@ -145,7 +145,6 @@ class Engine():
         self.configuration_xpath = None
         self.configuration_path = None
         self.engine_configuration = read_configuration()
-        self.trash_directory = self._configured_trash_directory()
         self.final_removal_delay_days = self._configured_final_removal_delay_days()
 
     def get_exit_codes(self):
@@ -170,19 +169,6 @@ class Engine():
         :raises KeyError: when the exit-code key is unknown
         """
         return self.get_exit_codes()[name]
-
-    def _configured_trash_directory(self):
-        """
-        Return the trash directory name configured for archived payload removal.
-
-        :return: configured trash directory name, or default ``trash``
-        :rtype: str
-        """
-        archive_configuration = self.engine_configuration.get("ARCHIVE", {})
-        trash_directory = archive_configuration.get("TRASH_DIRECTORY", DEFAULT_TRASH_DIRECTORY_NAME)
-        if trash_directory is None or str(trash_directory).strip() == "":
-            return DEFAULT_TRASH_DIRECTORY_NAME
-        return str(trash_directory).strip()
 
     def _configured_final_removal_delay_days(self):
         """
@@ -1391,7 +1377,7 @@ class Engine():
         """
         directory = os.path.join(
             root_directory,
-            self.trash_directory,
+            TRASH_DIRECTORY_NAME,
             removal_date.strftime("%Y"),
             removal_date.strftime("%m"),
             removal_date.strftime("%d"),

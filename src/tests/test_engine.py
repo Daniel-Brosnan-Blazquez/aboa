@@ -640,17 +640,16 @@ class TestEngine(unittest.TestCase):
         assert operations[0].file_uuid == archived_file.file_uuid
         assert trash_path in operations[0].message
 
-    def test_trash_configuration_is_loaded_from_engine_configuration(self):
+    def test_final_removal_delay_is_loaded_from_engine_configuration(self):
         """
-        Move physical deletions using trash settings configured in engine.json.
+        Move physical deletions using cleanup delay configured in engine.json.
         """
         original_read_configuration = engine_module.read_configuration
         engine = None
 
         def read_custom_configuration():
             configuration = original_read_configuration()
-            configuration.setdefault("ARCHIVE", {})["TRASH_DIRECTORY"] = "custom_trash"
-            configuration["ARCHIVE"]["FINAL_REMOVAL_DELAY_DAYS"] = 7
+            configuration.setdefault("ARCHIVE", {})["FINAL_REMOVAL_DELAY_DAYS"] = 7
             return configuration
 
         try:
@@ -661,11 +660,10 @@ class TestEngine(unittest.TestCase):
             deleted = engine.delete_files(file_uuids=[archived_file.file_uuid], physical_delete=True)
             queued = engine.query.get_files_to_be_removed(file_uuids={"filter": [archived_file.file_uuid], "op": "in"})
 
-            assert engine.trash_directory == "custom_trash"
             assert engine.final_removal_delay_days == 7
             assert len(queued) == 1
             assert queued[0].removal_date == deleted[0].removal_date + datetime.timedelta(days=7)
-            assert "custom_trash" in queued[0].path.split(os.sep)
+            assert "trash" in queued[0].path.split(os.sep)
             assert not os.path.exists(deleted[0].path)
             assert os.path.exists(queued[0].path)
         finally:

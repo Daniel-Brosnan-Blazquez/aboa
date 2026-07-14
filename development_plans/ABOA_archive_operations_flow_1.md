@@ -18,9 +18,8 @@ failed operations are written to both the log and `archive_operations`.
    <root_directory>/<target_directory>/<YEAR>/<MONTH>/<DAY>/<file_name>
    ```
 
-5. The reserved target directories are `unknown`, `error`, and the configured trash
-   directory. User archive configuration files cannot route normal files into these
-   internal areas.
+5. The reserved target directories are `unknown`, `error`, and `trash`. User
+   archive configuration files cannot route normal files into these internal areas.
 6. A file is logically available when `archived_files.available` is true.
 7. A file is physically available when its payload exists either at
    `archived_files.path` or in a queued trash path.
@@ -173,7 +172,7 @@ failed operations are written to both the log and `archive_operations`.
 3. Build a trash path using this layout:
 
    ```text
-   <root_directory>/<trash_directory>/<YEAR>/<MONTH>/<DAY>/<file_name>
+   <root_directory>/trash/<YEAR>/<MONTH>/<DAY>/<file_name>
    ```
 
 4. If the trash path already exists, append the archived-file UUID to avoid
