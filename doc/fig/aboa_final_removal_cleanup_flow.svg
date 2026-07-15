@@ -1,0 +1,329 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   width="1200"
+   height="720"
+   viewBox="0 0 1200 720"
+   role="img"
+   aria-labelledby="title desc"
+   version="1.1"
+   id="svg33"
+   sodipodi:docname="aboa_final_removal_cleanup_flow.svg"
+   inkscape:version="1.4.4 (dcaf3e7d9e, 2026-05-05)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview33"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:zoom="0.89166667"
+     inkscape:cx="600"
+     inkscape:cy="359.43925"
+     inkscape:window-width="1920"
+     inkscape:window-height="1011"
+     inkscape:window-x="0"
+     inkscape:window-y="0"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="svg33" />
+  <title
+     id="title">ABOA final removal cleanup flow</title>
+  <desc
+     id="desc">High-level schematic for selecting due trash rows, dry-run behavior, deleting trash payloads, and marking archived files no longer physically available.</desc>
+  <defs
+     id="defs1">
+    <marker
+       id="arrow"
+       viewBox="0 0 10 10"
+       refX="9"
+       refY="5"
+       markerWidth="8"
+       markerHeight="8"
+       orient="auto-start-reverse">
+      <path
+         d="M 0 0 L 10 5 L 0 10 z"
+         fill="#5b6472"
+         id="path1" />
+    </marker>
+    <style
+       id="style1">
+      .bg { fill: #f7f9fc; }
+      .title { fill: #1f2937; font: 700 30px Arial, sans-serif; }
+      .subtitle { fill: #5b6472; font: 400 15px Arial, sans-serif; }
+      .step { fill: #ffffff; stroke: #9aa7b5; stroke-width: 1.5; rx: 8; }
+      .decision { fill: #fff8e6; stroke: #d6a84f; stroke-width: 1.5; }
+      .data { fill: #eef5ff; stroke: #5b8fd6; stroke-width: 1.5; rx: 8; }
+      .success { fill: #ecfdf3; stroke: #4f9d69; stroke-width: 1.5; rx: 8; }
+      .failure { fill: #fff1f1; stroke: #d46a6a; stroke-width: 1.5; rx: 8; }
+      .boxtext { fill: #1f2937; font: 700 15px Arial, sans-serif; text-anchor: middle; }
+      .small { fill: #374151; font: 400 13px Arial, sans-serif; text-anchor: middle; }
+      .label { fill: #5b6472; font: 700 12px Arial, sans-serif; text-anchor: middle; }
+      .arrow { stroke: #5b6472; stroke-width: 2; fill: none; marker-end: url(#arrow); }
+      .dash { stroke: #8b98a8; stroke-width: 2; fill: none; stroke-dasharray: 7 6; marker-end: url(#arrow); }
+    </style>
+  </defs>
+  <rect
+     class="bg"
+     width="1200"
+     height="720"
+     id="rect1" />
+  <text
+     class="title"
+     x="60"
+     y="62"
+     id="text1">Final removal cleanup flow</text>
+  <text
+     class="subtitle"
+     x="60"
+     y="88"
+     id="text2">Final removal permanently deletes queued trash payloads and closes their physical availability in inventory.</text>
+  <g
+     id="selection-flow">
+    <polygon
+       class="decision"
+       points="190,140 310,200 190,260 70,200"
+       id="polygon2" />
+    <text
+       class="boxtext"
+       x="190"
+       y="196"
+       id="text3">Empty trash</text>
+    <text
+       class="small"
+       x="190"
+       y="216"
+       id="text4">requested?</text>
+    <rect
+       class="data"
+       x="420"
+       y="120"
+       width="250"
+       height="82"
+       id="rect4" />
+    <text
+       class="boxtext"
+       x="545"
+       y="152"
+       id="text5">Query all trash rows</text>
+    <text
+       class="small"
+       x="545"
+       y="172"
+       id="text6">files_to_be_removed</text>
+    <rect
+       class="data"
+       x="420"
+       y="250"
+       width="250"
+       height="82"
+       id="rect6" />
+    <text
+       class="boxtext"
+       x="545"
+       y="282"
+       id="text7">Query due rows</text>
+    <text
+       class="small"
+       x="545"
+       y="302"
+       id="text8">scheduled removal_date</text>
+    <text
+       class="small"
+       x="545"
+       y="320"
+       id="text9">has passed</text>
+    <polygon
+       class="decision"
+       points="850,183 960,240 850,297 740,240"
+       id="polygon9" />
+    <text
+       class="boxtext"
+       x="850"
+       y="236"
+       id="text10">Dry-run</text>
+    <text
+       class="small"
+       x="850"
+       y="256"
+       id="text11">enabled?</text>
+    <rect
+       class="success"
+       x="1010"
+       y="200"
+       width="150"
+       height="80"
+       id="rect11" />
+    <text
+       class="boxtext"
+       x="1085"
+       y="232"
+       id="text12">Return rows</text>
+    <text
+       class="small"
+       x="1085"
+       y="252"
+       id="text13">no changes</text>
+    <path
+       class="arrow"
+       d="M 310 200 C 360 170 370 160 411 160"
+       id="path13" />
+    <path
+       class="arrow"
+       d="M 190 260 C 220 320 350 310 411 291"
+       id="path14" />
+    <path
+       class="arrow"
+       d="M 670 160 C 700 168 723 195 748 221"
+       id="path15" />
+    <path
+       class="arrow"
+       d="M 670 291 C 700 283 724 266 748 255"
+       id="path16" />
+    <path
+       class="arrow"
+       d="M 960 240 H 1001"
+       id="path17" />
+  </g>
+  <g
+     id="removal-flow">
+    <rect
+       class="step"
+       x="100"
+       y="455"
+       width="230"
+       height="86"
+       id="rect17" />
+    <text
+       class="boxtext"
+       x="215"
+       y="488"
+       id="text17">Delete trash payload</text>
+    <text
+       class="small"
+       x="215"
+       y="508"
+       id="text18">from filesystem</text>
+    <rect
+       class="data"
+       x="420"
+       y="455"
+       width="250"
+       height="86"
+       id="rect18" />
+    <text
+       class="boxtext"
+       x="545"
+       y="488"
+       id="text19">Mark archived file</text>
+    <text
+       class="small"
+       x="545"
+       y="508"
+       id="text20">physically_available false</text>
+    <rect
+       class="data"
+       x="760"
+       y="455"
+       width="220"
+       height="86"
+       id="rect20" />
+    <text
+       class="boxtext"
+       x="870"
+       y="488"
+       id="text21">Delete queue row</text>
+    <text
+       class="small"
+       x="870"
+       y="508"
+       id="text22">processed</text>
+    <text
+       class="small"
+       x="870"
+       y="526"
+       id="text23">files_to_be_removed</text>
+    <rect
+       class="success"
+       x="1040"
+       y="455"
+       width="130"
+       height="86"
+       id="rect23" />
+    <text
+       class="boxtext"
+       x="1105"
+       y="488"
+       id="text24">Commit</text>
+    <text
+       class="small"
+       x="1105"
+       y="508"
+       id="text25">transaction</text>
+    <path
+       class="arrow"
+       d="M 850 297 C 850 385 215 365 215 446"
+       id="path25" />
+    <path
+       class="arrow"
+       d="M 330 498 H 411"
+       id="path26" />
+    <path
+       class="arrow"
+       d="M 670 498 H 751"
+       id="path27" />
+    <path
+       class="arrow"
+       d="M 980 498 H 1031"
+       id="path28" />
+  </g>
+  <g
+     id="failure-flow">
+    <rect
+       class="failure"
+       x="140"
+       y="625"
+       width="920"
+       height="58"
+       id="rect28" />
+    <text
+       class="boxtext"
+       x="600"
+       y="649"
+       id="text28">Failure path: record FINAL_REMOVAL_FAILED and raise the final-removal cleanup error.</text>
+    <path
+       class="dash"
+       d="M 215 541 C 280 595 450 604 520 616"
+       id="path29" />
+    <path
+       class="dash"
+       d="M 870 541 C 820 590 740 604 680 616"
+       id="path30" />
+  </g>
+  <text
+     class="label"
+     x="314"
+     y="180"
+     id="text30"
+     style="font-style:normal;font-variant:normal;font-weight:700;font-stretch:normal;font-size:12px;line-height:normal;font-family:Arial, sans-serif">yes</text>
+  <text
+     class="label"
+     x="222"
+     y="271"
+     id="text31"
+     style="font-style:normal;font-variant:normal;font-weight:700;font-stretch:normal;font-size:12px;line-height:normal;font-family:Arial, sans-serif">no</text>
+  <text
+     class="label"
+     x="982"
+     y="228"
+     id="text32">yes</text>
+  <text
+     class="label"
+     x="812"
+     y="324"
+     id="text33">no</text>
+</svg>
