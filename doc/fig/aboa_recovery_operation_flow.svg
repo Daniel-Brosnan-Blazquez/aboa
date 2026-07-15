@@ -1,0 +1,374 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   width="1300"
+   height="860"
+   viewBox="0 0 1300 860"
+   role="img"
+   aria-labelledby="title desc"
+   version="1.1"
+   id="svg39"
+   sodipodi:docname="aboa_recovery_operation_flow.svg"
+   inkscape:version="1.4.4 (dcaf3e7d9e, 2026-05-05)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview39"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:zoom="0.58200327"
+     inkscape:cx="666.66292"
+     inkscape:cy="456.183"
+     inkscape:window-width="1920"
+     inkscape:window-height="1011"
+     inkscape:window-x="0"
+     inkscape:window-y="0"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="commit-and-failure" />
+  <title
+     id="title">ABOA recovery operation flow</title>
+  <desc
+     id="desc">High-level schematic for recovering physically trashed payloads and logical-only deleted files in ABOA.</desc>
+  <defs
+     id="defs1">
+    <marker
+       id="arrow"
+       viewBox="0 0 10 10"
+       refX="9"
+       refY="5"
+       markerWidth="8"
+       markerHeight="8"
+       orient="auto-start-reverse">
+      <path
+         d="M 0 0 L 10 5 L 0 10 z"
+         fill="#5b6472"
+         id="path1" />
+    </marker>
+    <style
+       id="style1">
+      .bg { fill: #f7f9fc; }
+      .title { fill: #1f2937; font: 700 30px Arial, sans-serif; }
+      .subtitle { fill: #5b6472; font: 400 15px Arial, sans-serif; }
+      .lane { fill: #ffffff; stroke: #d9e0e8; stroke-width: 1; rx: 8; }
+      .lane-title { fill: #5b6472; font: 700 13px Arial, sans-serif; }
+      .step { fill: #ffffff; stroke: #9aa7b5; stroke-width: 1.5; rx: 8; }
+      .data { fill: #eef5ff; stroke: #5b8fd6; stroke-width: 1.5; rx: 8; }
+      .success { fill: #ecfdf3; stroke: #4f9d69; stroke-width: 1.5; rx: 8; }
+      .failure { fill: #fff1f1; stroke: #d46a6a; stroke-width: 1.5; rx: 8; }
+      .boxtext { fill: #1f2937; font: 700 14px Arial, sans-serif; text-anchor: middle; }
+      .small { fill: #374151; font: 400 12px Arial, sans-serif; text-anchor: middle; }
+      .arrow { stroke: #5b6472; stroke-width: 2; fill: none; marker-end: url(#arrow); }
+      .dash { stroke: #8b98a8; stroke-width: 2; fill: none; stroke-dasharray: 7 6; marker-end: url(#arrow); }
+    </style>
+  </defs>
+  <rect
+     class="bg"
+     width="1300"
+     height="860"
+     id="rect1" />
+  <text
+     class="title"
+     x="60"
+     y="62"
+     id="text1">Recovery operation flow</text>
+  <text
+     class="subtitle"
+     x="60"
+     y="88"
+     id="text2">Recovery first handles trash payloads, then logical-only rows that still have archive-path payloads.</text>
+  <g
+     id="filter-flow">
+    <rect
+       class="step"
+       x="60"
+       y="130"
+       width="240"
+       height="76"
+       id="rect2" />
+    <text
+       class="boxtext"
+       x="180"
+       y="162"
+       id="text3">Build recovery filters</text>
+    <text
+       class="small"
+       x="180"
+       y="182"
+       id="text4">metadata and trash-specific</text>
+    <rect
+       class="data"
+       x="420"
+       y="130"
+       width="250"
+       height="76"
+       id="rect4" />
+    <text
+       class="boxtext"
+       x="545"
+       y="162"
+       id="text5">Query trash candidates</text>
+    <text
+       class="small"
+       x="545"
+       y="182"
+       id="text6">files_to_be_removed</text>
+    <path
+       class="arrow"
+       d="M 300 168 H 411"
+       id="path6" />
+  </g>
+  <rect
+     class="lane"
+     x="40"
+     y="250"
+     width="1220"
+     height="210"
+     id="rect6" />
+  <text
+     class="lane-title"
+     x="60"
+     y="278"
+     id="text7">Trash recovery candidates</text>
+  <rect
+     class="step"
+     x="80"
+     y="315"
+     width="220"
+     height="82"
+     id="rect7" />
+  <text
+     class="boxtext"
+     x="190"
+     y="347"
+     id="text8">Validate candidate</text>
+  <text
+     class="small"
+     x="190"
+     y="367"
+     id="text9">linked row, payload exists,</text>
+  <text
+     class="small"
+     x="190"
+     y="385"
+     id="text10">archive path is free</text>
+  <rect
+     class="step"
+     x="380"
+     y="315"
+     width="230"
+     height="82"
+     id="rect10" />
+  <text
+     class="boxtext"
+     x="495"
+     y="347"
+     id="text11">Move payload back</text>
+  <text
+     class="small"
+     x="495"
+     y="367"
+     id="text12">recreate archive directory</text>
+  <text
+     class="small"
+     x="495"
+     y="385"
+     id="text13">when needed</text>
+  <rect
+     class="data"
+     x="690"
+     y="315"
+     width="250"
+     height="82"
+     id="rect13" />
+  <text
+     class="boxtext"
+     x="815"
+     y="347"
+     id="text14">Restore inventory</text>
+  <text
+     class="small"
+     x="815"
+     y="367"
+     id="text15">available and physically</text>
+  <text
+     class="small"
+     x="815"
+     y="385"
+     id="text16">available, clear removal</text>
+  <rect
+     class="data"
+     x="1020"
+     y="315"
+     width="200"
+     height="82"
+     id="rect16" />
+  <text
+     class="boxtext"
+     x="1120"
+     y="347"
+     id="text17">Delete trash row</text>
+  <text
+     class="small"
+     x="1120"
+     y="367"
+     id="text18">after file is back</text>
+  <path
+     class="arrow"
+     d="m 545,206 c 3.40397,42.53862 -340.45405,58.3946 -355,100"
+     id="path18"
+     sodipodi:nodetypes="cc" />
+  <path
+     class="arrow"
+     d="M 300 356 H 371"
+     id="path19" />
+  <path
+     class="arrow"
+     d="M 610 356 H 681"
+     id="path20" />
+  <path
+     class="arrow"
+     d="M 940 356 H 1011"
+     id="path21" />
+  <rect
+     class="lane"
+     x="40"
+     y="500"
+     width="1220"
+     height="210"
+     id="rect21" />
+  <text
+     class="lane-title"
+     x="60"
+     y="528"
+     id="text21">Logical-only recovery candidates</text>
+  <rect
+     class="data"
+     x="80"
+     y="565"
+     width="240"
+     height="82"
+     id="rect22" />
+  <text
+     class="boxtext"
+     x="200"
+     y="597"
+     id="text22">Query mapped UUIDs</text>
+  <text
+     class="small"
+     x="200"
+     y="617"
+     id="text23">only when filters can map</text>
+  <rect
+     class="step"
+     x="400"
+     y="565"
+     width="250"
+     height="82"
+     id="rect23" />
+  <text
+     class="boxtext"
+     x="525"
+     y="597"
+     id="text24">Validate logical row</text>
+  <text
+     class="small"
+     x="525"
+     y="617"
+     id="text25">unavailable, not trash queued,</text>
+  <text
+     class="small"
+     x="525"
+     y="635"
+     id="text26">payload exists at archive path</text>
+  <rect
+     class="data"
+     x="730"
+     y="565"
+     width="260"
+     height="82"
+     id="rect26" />
+  <text
+     class="boxtext"
+     x="860"
+     y="597"
+     id="text27">Restore inventory</text>
+  <text
+     class="small"
+     x="860"
+     y="617"
+     id="text28">availability, size, deletion</text>
+  <text
+     class="small"
+     x="860"
+     y="635"
+     id="text29">metadata and retention link</text>
+  <path
+     class="arrow"
+     d="m 1120,397 c 12.761,96.74262 -891.9166,103.24366 -920,159"
+     id="path29"
+     sodipodi:nodetypes="cc" />
+  <path
+     class="arrow"
+     d="M 320 606 H 391"
+     id="path30" />
+  <path
+     class="arrow"
+     d="M 650 606 H 721"
+     id="path31" />
+  <g
+     id="commit-and-failure">
+    <rect
+       class="success"
+       x="360"
+       y="770"
+       width="210"
+       height="62"
+       id="rect31" />
+    <text
+       class="boxtext"
+       x="465"
+       y="796"
+       id="text31">Commit recoveries</text>
+    <text
+       class="small"
+       x="465"
+       y="814"
+       id="text32">successful rows</text>
+    <rect
+       class="failure"
+       x="670"
+       y="770"
+       width="260"
+       height="62"
+       id="rect32" />
+    <text
+       class="boxtext"
+       x="800"
+       y="796"
+       id="text33">Per-file failure</text>
+    <text
+       class="small"
+       x="800"
+       y="814"
+       id="text34">record RECOVERY_FAILED, raise</text>
+    <path
+       class="arrow"
+       d="M 860 647 C 860 728 465 720 465 761"
+       id="path36" />
+    <path
+       class="dash"
+       d="M 525 647 C 570 725 708 733 772 761"
+       id="path37" />
+    <path
+       class="dash"
+       d="M 190,397 C 230,543.5 297.79206,386.54907 366.3493,640.12617 401.77609,771.16155 737.5,736.5 800,761"
+       id="path38"
+       sodipodi:nodetypes="csc" />
+  </g>
+</svg>

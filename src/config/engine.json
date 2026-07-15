@@ -1,0 +1,10 @@
+{
+  "LOG": {
+    "LEVEL": "INFO",
+    "MAX_BYTES": 50000000,
+    "MAX_BACKUP": 30
+  },
+  "ARCHIVE": {
+    "FINAL_REMOVAL_DELAY_DAYS": 30
+  }
+}

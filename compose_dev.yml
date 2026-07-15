@@ -1,0 +1,34 @@
+services:
+
+   aboa_db:
+      image: mdillon/postgis
+      container_name: aboa_db
+      restart: always
+      shm_size: 512M
+      command: -c max_connections=5000 -c max_locks_per_transaction=5000
+      networks:
+         - boa_network
+
+   aboa:
+      build:
+         context: .
+         dockerfile: Dockerfile.dev
+      container_name: aboa
+      restart: always
+      hostname: aboa
+      environment:
+         - ABOA_DDBB_HOST=aboa_db
+         - ABOA_RESOURCES_PATH=/aboa/src/config
+         - ABOA_LOG_PATH=/log
+         - ABOA_SCHEMAS_PATH=/aboa/src/schemas
+         - ABOA_DEFAULT_ARCHIVE_PATH=/aboa_archive
+         - PYTHONDONTWRITEBYTECODE=1
+      volumes:
+         - .:/aboa:rw
+      shm_size: 512M
+      networks:
+         - boa_network
+
+networks:
+   boa_network:
+      name: boa_network

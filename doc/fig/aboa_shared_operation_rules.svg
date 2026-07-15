@@ -1,0 +1,330 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   width="1200"
+   height="720"
+   viewBox="0 0 1200 720"
+   role="img"
+   aria-labelledby="title desc"
+   version="1.1"
+   id="svg33"
+   sodipodi:docname="aboa_shared_operation_rules.svg"
+   inkscape:version="1.4.4 (dcaf3e7d9e, 2026-05-05)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview33"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:zoom="0.63050355"
+     inkscape:cx="566.2141"
+     inkscape:cy="494.04956"
+     inkscape:window-width="1920"
+     inkscape:window-height="1011"
+     inkscape:window-x="0"
+     inkscape:window-y="0"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="svg33" />
+  <title
+     id="title">ABOA shared operation rules</title>
+  <desc
+     id="desc">High-level schematic showing the shared transaction, success, failure, storage, and availability rules used by ABOA archive operations.</desc>
+  <defs
+     id="defs1">
+    <marker
+       id="arrow"
+       viewBox="0 0 10 10"
+       refX="9"
+       refY="5"
+       markerWidth="8"
+       markerHeight="8"
+       orient="auto-start-reverse">
+      <path
+         d="M 0 0 L 10 5 L 0 10 z"
+         fill="#5b6472"
+         id="path1" />
+    </marker>
+    <style
+       id="style1">
+      .bg { fill: #f7f9fc; }
+      .title { fill: #1f2937; font: 700 30px Arial, sans-serif; }
+      .subtitle { fill: #5b6472; font: 400 15px Arial, sans-serif; }
+      .lane-title { fill: #374151; font: 700 16px Arial, sans-serif; }
+      .step { fill: #ffffff; stroke: #9aa7b5; stroke-width: 1.5; rx: 8; }
+      .success { fill: #ecfdf3; stroke: #4f9d69; stroke-width: 1.5; rx: 8; }
+      .failure { fill: #fff1f1; stroke: #d46a6a; stroke-width: 1.5; rx: 8; }
+      .data { fill: #eef5ff; stroke: #5b8fd6; stroke-width: 1.5; rx: 8; }
+      .note { fill: #fff8e6; stroke: #d6a84f; stroke-width: 1.5; rx: 8; }
+      .boxtext { fill: #1f2937; font: 700 15px Arial, sans-serif; text-anchor: middle; }
+      .small { fill: #374151; font: 400 13px Arial, sans-serif; text-anchor: middle; }
+      .label { fill: #5b6472; font: 700 12px Arial, sans-serif; text-anchor: middle; }
+      .arrow { stroke: #5b6472; stroke-width: 2; fill: none; marker-end: url(#arrow); }
+      .dash { stroke: #8b98a8; stroke-width: 2; fill: none; stroke-dasharray: 7 6; marker-end: url(#arrow); }
+    </style>
+  </defs>
+  <rect
+     class="bg"
+     width="1200"
+     height="720"
+     id="rect1" />
+  <text
+     class="title"
+     x="60"
+     y="62"
+     id="text1">Shared operation rules</text>
+  <text
+     class="subtitle"
+     x="60"
+     y="88"
+     id="text2">The database inventory is the source of truth; successful operations log only, failures log and persist archive_operations rows.</text>
+  <g
+     id="transaction-path">
+    <text
+       class="lane-title"
+       x="70"
+       y="145"
+       id="text3">Per-request transaction</text>
+    <rect
+       class="step"
+       x="70"
+       y="170"
+       width="210"
+       height="86"
+       id="rect3" />
+    <text
+       class="boxtext"
+       x="175"
+       y="206"
+       id="text4">Mutating request</text>
+    <text
+       class="small"
+       x="175"
+       y="228"
+       id="text5">archive, retrieve, delete,</text>
+    <text
+       class="small"
+       x="175"
+       y="246"
+       id="text6">recover, cleanup</text>
+    <rect
+       class="data"
+       x="380"
+       y="170"
+       width="240"
+       height="86"
+       id="rect6" />
+    <text
+       class="boxtext"
+       x="500"
+       y="206"
+       id="text7">Open one DB transaction</text>
+    <text
+       class="small"
+       x="500"
+       y="228"
+       id="text8">owning metadata changes</text>
+    <rect
+       class="step"
+       x="730"
+       y="170"
+       width="210"
+       height="86"
+       id="rect8" />
+    <text
+       class="boxtext"
+       x="835"
+       y="206"
+       id="text9">Run operation logic</text>
+    <text
+       class="small"
+       x="835"
+       y="228"
+       id="text10">filesystem plus inventory</text>
+    <path
+       class="arrow"
+       d="M 280 213 H 371"
+       id="path10" />
+    <path
+       class="arrow"
+       d="M 620 213 H 721"
+       id="path11" />
+  </g>
+  <g
+     id="success-path">
+    <text
+       class="lane-title"
+       x="171.50616"
+       y="328.17206"
+       id="text11"
+       style="font-style:normal;font-variant:normal;font-weight:700;font-stretch:normal;font-size:16px;line-height:normal;font-family:Arial, sans-serif">Success path</text>
+    <rect
+       class="success"
+       x="70"
+       y="350"
+       width="250"
+       height="86"
+       id="rect11" />
+    <text
+       class="boxtext"
+       x="195"
+       y="386"
+       id="text12">Commit metadata changes</text>
+    <text
+       class="small"
+       x="195"
+       y="408"
+       id="text13">before returning</text>
+    <rect
+       class="success"
+       x="420"
+       y="350"
+       width="250"
+       height="86"
+       id="rect13" />
+    <text
+       class="boxtext"
+       x="545"
+       y="386"
+       id="text14">Write success to log</text>
+    <text
+       class="small"
+       x="545"
+       y="408"
+       id="text15">no archive_operations row</text>
+    <rect
+       class="success"
+       x="770"
+       y="350"
+       width="210"
+       height="86"
+       id="rect15" />
+    <text
+       class="boxtext"
+       x="875"
+       y="386"
+       id="text16">Return result</text>
+    <text
+       class="small"
+       x="875"
+       y="408"
+       id="text17">rows or completion status</text>
+    <path
+       class="arrow"
+       d="M 940,256 C 1051.3955,297.73259 -235.8307,271.10506 69.100337,395.17207"
+       id="path17"
+       sodipodi:nodetypes="cc" />
+    <path
+       class="arrow"
+       d="M 320 393 H 411"
+       id="path18" />
+    <path
+       class="arrow"
+       d="M 670 393 H 761"
+       id="path19" />
+  </g>
+  <g
+     id="failure-path">
+    <text
+       class="lane-title"
+       x="168.33411"
+       y="502.93018"
+       id="text19"
+       style="font-style:normal;font-variant:normal;font-weight:700;font-stretch:normal;font-size:16px;line-height:normal;font-family:Arial, sans-serif">Failure path</text>
+    <rect
+       class="failure"
+       x="70"
+       y="520"
+       width="220"
+       height="96"
+       id="rect19" />
+    <text
+       class="boxtext"
+       x="180"
+       y="554"
+       id="text20">Roll back incomplete</text>
+    <text
+       class="small"
+       x="180"
+       y="576"
+       id="text21">metadata changes</text>
+    <rect
+       class="failure"
+       x="360"
+       y="520"
+       width="250"
+       height="96"
+       id="rect21" />
+    <text
+       class="boxtext"
+       x="485"
+       y="554"
+       id="text22">Record failure row</text>
+    <text
+       class="small"
+       x="485"
+       y="576"
+       id="text23">when enough context exists</text>
+    <text
+       class="small"
+       x="485"
+       y="594"
+       id="text24">in archive_operations</text>
+    <rect
+       class="failure"
+       x="680"
+       y="520"
+       width="230"
+       height="96"
+       id="rect24" />
+    <text
+       class="boxtext"
+       x="795"
+       y="554"
+       id="text25">Commit failure record</text>
+    <text
+       class="small"
+       x="795"
+       y="576"
+       id="text26">and write failure log</text>
+    <rect
+       class="failure"
+       x="980"
+       y="520"
+       width="160"
+       height="96"
+       id="rect26" />
+    <text
+       class="boxtext"
+       x="1060"
+       y="554"
+       id="text27">Raise engine</text>
+    <text
+       class="small"
+       x="1060"
+       y="576"
+       id="text28">exception</text>
+    <path
+       class="arrow"
+       d="M 731.43654,255.20698 C -50.68071,282.59895 14.46271,306.0405 13.935391,376.82629 13.372741,452.35477 10.651393,578.4304 69.730813,566.81047"
+       id="path28"
+       sodipodi:nodetypes="csc" />
+    <path
+       class="arrow"
+       d="M 290 568 H 351"
+       id="path29" />
+    <path
+       class="arrow"
+       d="M 610 568 H 671"
+       id="path30" />
+    <path
+       class="arrow"
+       d="M 910 568 H 971"
+       id="path31" />
+  </g>
+</svg>

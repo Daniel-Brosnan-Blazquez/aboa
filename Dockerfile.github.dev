@@ -1,0 +1,76 @@
+# Base the image on Rocky Linux (Red Hat compatible)
+FROM rockylinux:9
+
+ARG REPOSITORY_URI
+ARG GITHUB_BRANCH
+
+USER root
+
+RUN useradd -m -r boa
+
+RUN yum install -y epel-release
+
+RUN yum install --allowerasing -y \
+    git \
+    glibc-langpack-en \
+    less \
+    make \
+    postgresql \
+    postgresql-devel \
+    procps \
+    python3 \
+    python3-devel \
+    python3-pip \
+    redhat-rpm-config \
+    which
+
+RUN pip3 install wheel
+
+# Create folders for ABOA runtime resources.
+RUN mkdir /log \
+    /scripts \
+    /resources_path \
+    /schemas \
+    /datamodel \
+    /aboa_archive \
+    /aboa
+
+RUN chown -R boa:boa /log /scripts /resources_path /schemas /datamodel /aboa_archive /aboa
+
+# Create a shared folder for python packages, matching the BOA development image
+# pattern while keeping installed packages outside the source tree.
+RUN mkdir /usr/local/python-packages
+RUN chown -R boa:boa /usr/local/python-packages
+
+ENV PYTHONPATH=/usr/local/python-packages
+ENV PATH="/usr/local/python-packages/bin:${PATH}"
+
+USER boa
+
+# Install ABOA packages from the GitHub branch under test.
+RUN git clone --branch ${GITHUB_BRANCH} ${REPOSITORY_URI}
+
+# Install ABOA and the test extra dependencies.
+RUN pip3 install --use-pep517 --target=/usr/local/python-packages "/aboa/src[tests]"
+
+# Copy ABOA runtime assets to stable container paths.
+RUN cp /aboa/src/config/* /resources_path
+RUN cp /aboa/src/scripts/*.py /scripts
+RUN cp /aboa/src/scripts/*.sh /scripts
+RUN cp /aboa/src/datamodel/aboa_data_model.sql /datamodel
+RUN cp /aboa/src/datamodel/aboa_data_model.dbm /datamodel
+RUN cp /aboa/src/schemas/* /schemas
+
+# Environment variables for ABOA.
+ENV ABOA_RESOURCES_PATH=/resources_path
+ENV ABOA_LOG_PATH=/log
+ENV ABOA_SCHEMAS_PATH=/schemas
+ENV ABOA_DEFAULT_ARCHIVE_PATH=/aboa_archive
+ENV LC_ALL=en_US.utf-8
+ENV LANG=en_US.utf-8
+ENV PATH="${PATH}:/scripts:/usr/local/python-packages/bin"
+
+# Copy the environment variables to a file for later use by scheduled jobs.
+RUN /bin/bash -c "declare -p | grep -Ev 'BASHOPTS|BASH_VERSINFO|EUID|PPID|SHELLOPTS|UID' > /resources_path/container.env"
+
+CMD ["/bin/bash", "-c", "/scripts/start_aboa.sh"]

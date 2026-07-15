@@ -1,0 +1,515 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   width="1400"
+   height="900"
+   viewBox="0 0 1400 900"
+   role="img"
+   aria-labelledby="title desc"
+   version="1.1"
+   id="svg56"
+   sodipodi:docname="aboa_archive_operation_flow.svg"
+   inkscape:version="1.4.4 (dcaf3e7d9e, 2026-05-05)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview56"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:zoom="0.76428571"
+     inkscape:cx="919.15888"
+     inkscape:cy="565.88785"
+     inkscape:window-width="1920"
+     inkscape:window-height="1011"
+     inkscape:window-x="0"
+     inkscape:window-y="0"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="svg56" />
+  <title
+     id="title">ABOA archive operation flow</title>
+  <desc
+     id="desc">High-level schematic for the ABOA archive request, routing, storage, inventory commit, optional input deletion, and failure recording paths.</desc>
+  <defs
+     id="defs1">
+    <marker
+       id="arrow"
+       viewBox="0 0 10 10"
+       refX="9"
+       refY="5"
+       markerWidth="8"
+       markerHeight="8"
+       orient="auto-start-reverse">
+      <path
+         d="M 0 0 L 10 5 L 0 10 z"
+         fill="#5b6472"
+         id="path1" />
+    </marker>
+    <style
+       id="style1">
+      .bg { fill: #f7f9fc; }
+      .title { fill: #1f2937; font: 700 30px Arial, sans-serif; }
+      .subtitle { fill: #5b6472; font: 400 15px Arial, sans-serif; }
+      .lane { fill: #ffffff; stroke: #d9e0e8; stroke-width: 1; rx: 8; }
+      .lane-title { fill: #5b6472; font: 700 13px Arial, sans-serif; }
+      .step { fill: #ffffff; stroke: #9aa7b5; stroke-width: 1.5; rx: 8; }
+      .decision { fill: #fff8e6; stroke: #d6a84f; stroke-width: 1.5; }
+      .data { fill: #eef5ff; stroke: #5b8fd6; stroke-width: 1.5; rx: 8; }
+      .success { fill: #ecfdf3; stroke: #4f9d69; stroke-width: 1.5; rx: 8; }
+      .failure { fill: #fff1f1; stroke: #d46a6a; stroke-width: 1.5; rx: 8; }
+      .boxtext { fill: #1f2937; font: 700 14px Arial, sans-serif; text-anchor: middle; }
+      .small { fill: #374151; font: 400 12px Arial, sans-serif; text-anchor: middle; }
+      .label { fill: #5b6472; font: 700 12px Arial, sans-serif; text-anchor: middle; }
+      .arrow { stroke: #5b6472; stroke-width: 2; fill: none; marker-end: url(#arrow); }
+      .dash { stroke: #8b98a8; stroke-width: 2; fill: none; stroke-dasharray: 7 6; marker-end: url(#arrow); }
+    </style>
+  </defs>
+  <rect
+     class="bg"
+     width="1400"
+     height="900"
+     id="rect1" />
+  <text
+     class="title"
+     x="60"
+     y="62"
+     id="text1">Archive operation flow</text>
+  <text
+     class="subtitle"
+     x="60"
+     y="88"
+     id="text2">Incoming files are routed by configuration, moved under ABOA control, then committed to the inventory.</text>
+  <rect
+     class="lane"
+     x="40"
+     y="122"
+     width="1320"
+     height="160"
+     id="rect2" />
+  <text
+     class="lane-title"
+     x="60"
+     y="150"
+     id="text3">Request preparation</text>
+  <rect
+     class="step"
+     x="70"
+     y="175"
+     width="170"
+     height="72"
+     id="rect3" />
+  <text
+     class="boxtext"
+     x="155"
+     y="205"
+     id="text4">Log request</text>
+  <text
+     class="small"
+     x="155"
+     y="225"
+     id="text5">archive call starts</text>
+  <rect
+     class="step"
+     x="300"
+     y="175"
+     width="190"
+     height="72"
+     id="rect5" />
+  <text
+     class="boxtext"
+     x="395"
+     y="205"
+     id="text6">Normalize inputs</text>
+  <text
+     class="small"
+     x="395"
+     y="225"
+     id="text7">metadata and dates</text>
+  <rect
+     class="data"
+     x="560"
+     y="175"
+     width="220"
+     height="72"
+     id="rect7" />
+  <text
+     class="boxtext"
+     x="670"
+     y="205"
+     id="text8">Load configuration</text>
+  <text
+     class="small"
+     x="670"
+     y="225"
+     id="text9">refresh active root/history</text>
+  <rect
+     class="data"
+     x="850"
+     y="175"
+     width="230"
+     height="72"
+     id="rect9" />
+  <text
+     class="boxtext"
+     x="965"
+     y="205"
+     id="text10">Resolve active records</text>
+  <text
+     class="small"
+     x="965"
+     y="225"
+     id="text11">root and configuration row</text>
+  <polygon
+     class="decision"
+     points="1220,160 1310,211 1220,262 1130,211"
+     id="polygon11" />
+  <text
+     class="boxtext"
+     x="1220"
+     y="207"
+     id="text12">Input file</text>
+  <text
+     class="small"
+     x="1220"
+     y="227"
+     id="text13">exists?</text>
+  <path
+     class="arrow"
+     d="M 240 211 H 291"
+     id="path13" />
+  <path
+     class="arrow"
+     d="M 490 211 H 551"
+     id="path14" />
+  <path
+     class="arrow"
+     d="M 780 211 H 841"
+     id="path15" />
+  <path
+     class="arrow"
+     d="M 1080 211 H 1130"
+     id="path16" />
+  <rect
+     class="lane"
+     x="40"
+     y="322"
+     width="1320"
+     height="230"
+     id="rect16" />
+  <text
+     class="lane-title"
+     x="60"
+     y="350"
+     id="text16">Routing and preparation</text>
+  <rect
+     class="step"
+     x="70"
+     y="390"
+     width="190"
+     height="78"
+     id="rect17" />
+  <text
+     class="boxtext"
+     x="165"
+     y="420"
+     id="text17">Match archive rule</text>
+  <text
+     class="small"
+     x="165"
+     y="440"
+     id="text18">or use unknown</text>
+  <rect
+     class="step"
+     x="330"
+     y="390"
+     width="200"
+     height="78"
+     id="rect18" />
+  <text
+     class="boxtext"
+     x="430"
+     y="420"
+     id="text19">Run processor</text>
+  <text
+     class="small"
+     x="430"
+     y="440"
+     id="text20">merge metadata</text>
+  <text
+     class="small"
+     x="430"
+     y="458"
+     id="text21">failures route to error</text>
+  <rect
+     class="step"
+     x="600"
+     y="390"
+     width="210"
+     height="78"
+     id="rect21" />
+  <text
+     class="boxtext"
+     x="705"
+     y="420"
+     id="text22">Set expiration date</text>
+  <text
+     class="small"
+     x="705"
+     y="440"
+     id="text23">from metadata or policy</text>
+  <rect
+     class="step"
+     x="880"
+     y="390"
+     width="190"
+     height="78"
+     id="rect23" />
+  <text
+     class="boxtext"
+     x="975"
+     y="420"
+     id="text24">Generate checksum</text>
+  <text
+     class="small"
+     x="975"
+     y="440"
+     id="text25">failures route to error</text>
+  <polygon
+     class="decision"
+     points="1230,377 1330,429 1230,481 1130,429"
+     id="polygon25" />
+  <text
+     class="boxtext"
+     x="1230"
+     y="425"
+     id="text26">Duplicate</text>
+  <text
+     class="small"
+     x="1230"
+     y="445"
+     id="text27">available file?</text>
+  <path
+     class="arrow"
+     d="M 1220 262 C 1220 306 165 310 165 381"
+     id="path27" />
+  <path
+     class="arrow"
+     d="M 260 429 H 321"
+     id="path28" />
+  <path
+     class="arrow"
+     d="M 530 429 H 591"
+     id="path29" />
+  <path
+     class="arrow"
+     d="M 810 429 H 871"
+     id="path30" />
+  <path
+     class="arrow"
+     d="M 1070 429 H 1130"
+     id="path31" />
+  <rect
+     class="lane"
+     x="40"
+     y="592"
+     width="1320"
+     height="170"
+     id="rect31" />
+  <text
+     class="lane-title"
+     x="60"
+     y="620"
+     id="text31">Storage and commit</text>
+  <rect
+     class="step"
+     x="70"
+     y="650"
+     width="220"
+     height="78"
+     id="rect32" />
+  <text
+     class="boxtext"
+     x="180"
+     y="680"
+     id="text32">Build destination path</text>
+  <text
+     class="small"
+     x="180"
+     y="700"
+     id="text33">append UUID on collision</text>
+  <rect
+     class="step"
+     x="360"
+     y="650"
+     width="220"
+     height="78"
+     id="rect33" />
+  <text
+     class="boxtext"
+     x="470"
+     y="680"
+     id="text34">Store payload</text>
+  <text
+     class="small"
+     x="470"
+     y="700"
+     id="text35">hard link, copy, error retry</text>
+  <rect
+     class="data"
+     x="650"
+     y="650"
+     width="230"
+     height="78"
+     id="rect35" />
+  <text
+     class="boxtext"
+     x="765"
+     y="680"
+     id="text36">Insert inventory rows</text>
+  <text
+     class="small"
+     x="765"
+     y="700"
+     id="text37">archived_files and failures</text>
+  <rect
+     class="success"
+     x="950"
+     y="650"
+     width="170"
+     height="78"
+     id="rect37" />
+  <text
+     class="boxtext"
+     x="1035"
+     y="672"
+     id="text38"
+     style="font-style:normal;font-variant:normal;font-weight:700;font-stretch:normal;font-size:14px;line-height:normal;font-family:Arial, sans-serif">Commit transaction</text>
+  <text
+     class="small"
+     x="1035"
+     y="692"
+     id="text39"
+     style="font-style:normal;font-variant:normal;font-weight:400;font-stretch:normal;font-size:12px;line-height:normal;font-family:Arial, sans-serif">managed payload exists</text>
+  <rect
+     class="success"
+     x="1190"
+     y="650"
+     width="140"
+     height="78"
+     id="rect39" />
+  <text
+     class="boxtext"
+     x="1260"
+     y="680"
+     id="text40">Delete input?</text>
+  <text
+     class="small"
+     x="1260"
+     y="700"
+     id="text41">after commit only</text>
+  <path
+     class="arrow"
+     d="M 1230 481 C 1230 545 180 545 180 641"
+     id="path41" />
+  <path
+     class="arrow"
+     d="M 290 689 H 351"
+     id="path42" />
+  <path
+     class="arrow"
+     d="M 580 689 H 641"
+     id="path43" />
+  <path
+     class="arrow"
+     d="M 880 689 H 941"
+     id="path44" />
+  <path
+     class="arrow"
+     d="M 1120 689 H 1181"
+     id="path45" />
+  <text
+     class="boxtext"
+     x="1031.4702"
+     y="716.65924"
+     id="text46-9"
+     style="font-style:normal;font-variant:normal;font-weight:700;font-stretch:normal;font-size:14px;line-height:normal;font-family:Arial, sans-serif;text-anchor:middle;fill:#1f2937">Log success</text>
+  <g
+     id="failure-paths">
+    <rect
+       class="failure"
+       x="1078.0437"
+       y="800.00623"
+       width="254.23984"
+       height="55.987499"
+       id="rect47" />
+    <text
+       class="boxtext"
+       x="1205"
+       y="824"
+       id="text48">Record and raise failure</text>
+    <text
+       class="small"
+       x="1205"
+       y="842"
+       id="text49">FILE_DOES_NOT_EXIST, storage, delete, etc.</text>
+    <path
+       class="dash"
+       d="m 1310.6075,210.64486 c 117.999,161.87288 91.4534,567.65852 23.6854,611.5405"
+       id="path49"
+       sodipodi:nodetypes="cc" />
+    <path
+       class="dash"
+       d="m 430,468 c 12.5,51 322.85868,62.02808 441.40187,157.26051 152.79213,122.7465 -196.84579,195.98716 204.25233,186.34697"
+       id="path50"
+       sodipodi:nodetypes="csc" />
+    <path
+       class="dash"
+       d="m 975,468 c 70.5754,86.0476 188.7675,166.55607 215,323"
+       id="path51"
+       sodipodi:nodetypes="cc" />
+    <path
+       class="dash"
+       d="m 1327.1446,427.33919 c 93.0667,171.23782 -11.5997,359.50944 -36.724,368.89445"
+       id="path52"
+       sodipodi:nodetypes="cc" />
+    <path
+       class="dash"
+       d="m 470,728 c 75,78 455.23365,84.54206 606.2337,106.54206"
+       id="path53"
+       sodipodi:nodetypes="cc" />
+    <path
+       class="dash"
+       d="m 1260,728 c -1.3698,14.12146 -5.3476,35.49418 -10,63"
+       id="path54"
+       sodipodi:nodetypes="cc" />
+  </g>
+  <text
+     class="label"
+     x="1224.7103"
+     y="277.19626"
+     id="text54"
+     style="font-style:normal;font-variant:normal;font-weight:700;font-stretch:normal;font-size:12px;line-height:normal;font-family:Arial, sans-serif">yes</text>
+  <text
+     class="label"
+     x="1344.9918"
+     y="435.00031"
+     id="text54-3"
+     style="font-style:normal;font-variant:normal;font-weight:700;font-stretch:normal;font-size:12px;line-height:normal;font-family:Arial, sans-serif;text-anchor:middle;fill:#5b6472">yes</text>
+  <text
+     class="label"
+     x="1323.1122"
+     y="213.03738"
+     id="text55"
+     style="font-style:normal;font-variant:normal;font-weight:700;font-stretch:normal;font-size:12px;line-height:normal;font-family:Arial, sans-serif">no</text>
+  <text
+     class="label"
+     x="1202.0063"
+     y="486.89746"
+     id="text55-2"
+     style="font-style:normal;font-variant:normal;font-weight:700;font-stretch:normal;font-size:12px;line-height:normal;font-family:Arial, sans-serif;text-anchor:middle;fill:#5b6472">no</text>
+</svg>

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<archive_configurations root_directory="/var/archives">
+  <archive_configuration file_group="images">
+    <file_mask>*.jpg</file_mask>
+    <file_directory>images</file_directory>
+    <file_processor>metadata_processor</file_processor>
+    <retention_policy active="false" key="reception_date">P90D</retention_policy>
+  </archive_configuration>
+  <archive_configuration file_group="documents">
+    <file_mask>*.docx</file_mask>
+    <file_directory>documents</file_directory>
+    <retention_policy active="true" key="generation_date">P1Y</retention_policy>
+  </archive_configuration>
+</archive_configurations>

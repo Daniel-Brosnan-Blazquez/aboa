@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<archive_configurations root_directory="/tmp/aboa_test_query_archive_changed">
+  <archive_configuration file_group="group_a">
+    <file_mask>*.txt</file_mask>
+    <file_directory>texts</file_directory>
+  </archive_configuration>
+  <retention_policies>
+    <retention_policy key="archive_date" active="true">P1D</retention_policy>
+  </retention_policies>
+</archive_configurations>

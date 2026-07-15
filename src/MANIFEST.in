@@ -1,0 +1,5 @@
+include config/*.json
+include config/*.xml
+include schemas/*.xsd
+include datamodel/*.sql
+
