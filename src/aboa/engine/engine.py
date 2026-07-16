@@ -619,13 +619,11 @@ class Engine():
             recovery_date = datetime.datetime.utcnow()
             rows = self.query.get_files_to_be_removed(**filters)
             recovered_files = []
-            recovered_file_uuids = set()
             failures = []
             for file_to_be_removed in rows:
                 try:
                     recovered_file = self._recover_file_from_trash(file_to_be_removed, recovery_date=recovery_date)
                     recovered_files.append(recovered_file)
-                    recovered_file_uuids.add(recovered_file.file_uuid)
                 except Exception as exc:
                     message = "file {}: {}".format(file_to_be_removed.path, exc)
                     logger.error(message)
@@ -638,12 +636,9 @@ class Engine():
                     failures.append(message)
 
             for archived_file in self._get_logically_deleted_files_for_recovery(filters=filters):
-                if archived_file.file_uuid in recovered_file_uuids:
-                    continue
                 try:
                     recovered_file = self._recover_logically_deleted_file(archived_file, recovery_date=recovery_date)
                     recovered_files.append(recovered_file)
-                    recovered_file_uuids.add(recovered_file.file_uuid)
                 except Exception as exc:
                     message = "file {}: {}".format(archived_file.path, exc)
                     logger.error(message)
@@ -1170,10 +1165,6 @@ class Engine():
         removal_date = removal_date or datetime.datetime.utcnow()
         final_removal_date = removal_date + datetime.timedelta(days=self.final_removal_delay_days)
         root_directory = archived_file.rootDirectory
-        if root_directory is None:
-            root_directory = self.session.query(ArchiveRootDirectory).filter(
-                ArchiveRootDirectory.root_directory_uuid == archived_file.root_directory_uuid
-            ).first()
         trash_path = self._build_trash_path(root_directory.path, removal_date, archived_file)
         shutil.move(archived_file.path, trash_path)
 
@@ -1407,8 +1398,6 @@ class Engine():
             payload is missing
         """
         archived_file = file_to_be_removed.archivedFile
-        if archived_file is None:
-            raise ArchiveRecoveryError("The trash row is not linked to an archived file")
         if not os.path.exists(file_to_be_removed.path):
             self._sync_physical_availability(archived_file)
             raise ArchiveRecoveryError("The trash payload {} does not exist".format(file_to_be_removed.path))
@@ -1445,8 +1434,6 @@ class Engine():
         :raises ArchiveRecoveryError: when the payload is not available at the
             original archive path or the file is queued for trash recovery
         """
-        if archived_file is None:
-            raise ArchiveRecoveryError("The archived file row does not exist")
         if archived_file.available:
             raise ArchiveRecoveryError("The archived file {} is already available".format(archived_file.file_uuid))
         if self._get_file_to_be_removed(archived_file) is not None:

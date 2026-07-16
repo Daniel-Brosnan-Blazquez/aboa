@@ -13,6 +13,9 @@ from aboa.datamodel.archived_files import ArchiveConfiguration, ArchivedFile, Ar
 from aboa.engine.query import Query
 
 
+INPUTS = Path(__file__).parent / "inputs"
+
+
 class TestDatamodel(unittest.TestCase):
     """
     Unit and persistence tests for archived file, root, and operation models.
@@ -29,17 +32,21 @@ class TestDatamodel(unittest.TestCase):
         # need a root-directory relationship object to mirror production rows.
         self.test_root = Path(tempfile.mkdtemp(prefix="aboa_test_"))
         self.root_directory = ArchiveRootDirectory(uuid.uuid4(), "/tmp/archive", datetime.datetime(2026, 7, 2), active=True)
+        self.archive_configuration_path = str(INPUTS / "datamodel_archive_configuration.xml")
+        self.delete_archive_configuration_path = str(INPUTS / "datamodel_delete_archive_configuration.xml")
+        self.archive_configuration_content = Path(self.archive_configuration_path).read_text(encoding="utf-8").strip()
+        self.delete_archive_configuration_content = Path(self.delete_archive_configuration_path).read_text(encoding="utf-8").strip()
         self.archive_configuration = ArchiveConfiguration(
             uuid.uuid4(),
-            "/tmp/config/archive_configurations.xml",
+            self.archive_configuration_path,
             datetime.datetime(2026, 7, 2, 9, 0, 0),
-            """<archive_configurations root_directory="/tmp/archive"/>""",
+            self.archive_configuration_content,
         )
         self.delete_archive_configuration = ArchiveConfiguration(
             uuid.uuid4(),
-            "/tmp/config/delete_archive_configurations.xml",
+            self.delete_archive_configuration_path,
             datetime.datetime(2026, 7, 3, 9, 0, 0),
-            """<archive_configurations root_directory="/tmp/archive"><retention_policies/></archive_configurations>""",
+            self.delete_archive_configuration_content,
         )
 
     def tearDown(self):
@@ -180,10 +187,11 @@ class TestDatamodel(unittest.TestCase):
         Serialize archive-configuration history rows.
         """
         configuration_uuid = uuid.uuid4()
-        content = """<archive_configurations root_directory="/tmp/archive"/>"""
+        configuration_path = str(INPUTS / "datamodel_archive_configuration.xml")
+        content = Path(configuration_path).read_text(encoding="utf-8").strip()
         archive_configuration = ArchiveConfiguration(
             configuration_uuid,
-            "/tmp/config/archive_configurations.xml",
+            configuration_path,
             datetime.datetime(2026, 7, 2, 9, 0, 0),
             content,
             active_until=datetime.datetime(2026, 7, 3, 9, 0, 0),
@@ -194,7 +202,7 @@ class TestDatamodel(unittest.TestCase):
 
         assert structure == {
             "archive_configuration_uuid": str(configuration_uuid),
-            "path": "/tmp/config/archive_configurations.xml",
+            "path": configuration_path,
             "active_from": "2026-07-02T09:00:00",
             "active_until": "2026-07-03T09:00:00",
             "active": "False",
@@ -342,3 +350,28 @@ class TestDatamodel(unittest.TestCase):
             assert operation.jsonify()["file_uuid"] == str(file_uuid)
         finally:
             query.close_session()
+
+    def test_optional_relationship_constructors_can_omit_related_rows(self):
+        """
+        Build relationship-bearing models without optional related entities.
+        """
+        archived_file = ArchivedFile(
+            uuid.uuid4(),
+            "orphan.txt",
+            "/tmp/archive/orphan.txt",
+            datetime.datetime(2026, 7, 2, 10, 0, 0),
+            datetime.datetime(2026, 7, 2, 10, 1, 0),
+            0,
+            None,
+        )
+        file_to_remove = FileToBeRemoved(
+            uuid.uuid4(),
+            None,
+            "/tmp/archive/trash/orphan.txt",
+            None,
+            datetime.datetime(2026, 7, 3, 10, 0, 0),
+        )
+
+        assert archived_file.jsonify()["root_directory_uuid"] == ""
+        assert file_to_remove.jsonify()["file_uuid"] == ""
+        assert file_to_remove.jsonify()["root_directory_uuid"] == ""

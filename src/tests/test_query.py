@@ -223,3 +223,66 @@ class TestQuery(unittest.TestCase):
         assert rows[0].file_uuid == archived_file.file_uuid
         assert queued.root_directory_uuid in grouped
         assert last[0].file_uuid == queued.file_uuid
+
+    def test_query_date_number_offsets_default_ordering_and_invalid_controls(self):
+        """
+        Exercise date, numeric, offset, default ordering, and invalid query controls.
+        """
+        first = self.input_file("query_a.txt")
+        second = self.input_file("query_b.txt")
+        self.engine.archive_file(str(first), metadata={"file_type": "text"})
+        self.engine.archive_file(str(second), metadata={"file_type": "text"})
+        archived_file = self.engine.query.get_archived_files(names={"filter": "query_a.txt", "op": "like"})[0]
+        operation = ArchiveOperation(
+            uuid.uuid4(),
+            "archive",
+            datetime.datetime.utcnow(),
+            5,
+            message="duplicate",
+            archived_file=archived_file,
+        )
+        self.engine.session.add(operation)
+        self.engine.delete_files(file_uuids=[archived_file.file_uuid], physical_delete=True)
+        self.engine.session.commit()
+        queued = self.engine.query.get_files_to_be_removed(file_uuids={"filter": [archived_file.file_uuid], "op": "in"})[0]
+        query = Query(session=self.engine.session)
+        future = (datetime.datetime.utcnow() + datetime.timedelta(days=1)).isoformat()
+
+        file_rows = query.get_archived_files(
+            reception_date_filters=[{"date": future, "op": "<="}],
+            file_size_filters=[{"number": 0, "op": ">="}],
+            order_by={"field": "name", "descending": False},
+            offset=1,
+        )
+        default_last = query.get_archived_files(selection="last")
+        reversed_last = query.get_archived_files(selection="last", order_by={"field": "file_size", "descending": True})
+        root_rows = query.get_archive_root_directories(
+            active_from_date_filters=[{"date": future, "op": "<="}],
+            offset=0,
+        )
+        configuration_rows = query.get_archive_configurations(
+            active_from_date_filters=[{"date": future, "op": "<="}],
+            offset=0,
+        )
+        operation_rows = query.get_archive_operations(
+            time_stamp_filters=[{"date": future, "op": "<="}],
+            offset=0,
+        )
+        trash_rows = query.get_files_to_be_removed(
+            removal_date_filters=[{"date": queued.removal_date.isoformat(), "op": "=="}],
+            offset=0,
+        )
+        default_reversed_query = query._reverse_query_order(query.session.query(type(default_last[0])), None)
+
+        assert len(file_rows) == 1
+        assert default_last[0].file_uuid is not None
+        assert reversed_last[0].file_uuid is not None
+        assert default_reversed_query.first().file_uuid is not None
+        assert len(root_rows) == 1
+        assert len(configuration_rows) == 1
+        assert len(operation_rows) == 1
+        assert len(trash_rows) == 1
+        with self.assertRaises(InputError):
+            query.get_archived_files(group_by="not_a_field")
+        with self.assertRaises(InputError):
+            query.get_archived_files(selection="middle")

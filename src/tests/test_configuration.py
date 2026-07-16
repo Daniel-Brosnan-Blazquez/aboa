@@ -2,6 +2,7 @@
 Tests for archive XML configuration parsing and schema validation.
 """
 
+import os
 import unittest
 from pathlib import Path
 
@@ -163,3 +164,32 @@ class TestConfiguration(unittest.TestCase):
         """
         with self.assertRaises(ArchiveConfigurationError):
             get_archive_configuration(input_configuration("example_multiple_global_retention_policies.xml"))
+
+    def test_malformed_configuration_xml_is_rejected(self):
+        """
+        Reject files that are not well-formed XML.
+        """
+        with self.assertRaises(ArchiveConfigurationError):
+            get_archive_configuration(input_configuration("example_malformed.xml"), validate_schema=False)
+
+    def test_invalid_schema_xml_is_reported_as_configuration_error(self):
+        """
+        Convert malformed XSD files into ArchiveConfigurationError.
+        """
+        previous_schemas_path = os.environ.get("ABOA_SCHEMAS_PATH")
+        try:
+            os.environ["ABOA_SCHEMAS_PATH"] = str(INPUTS / "broken_schemas")
+            with self.assertRaises(ArchiveConfigurationError):
+                get_archive_configuration(input_configuration("example_basic.xml"))
+        finally:
+            if previous_schemas_path is None:
+                os.environ.pop("ABOA_SCHEMAS_PATH", None)
+            else:
+                os.environ["ABOA_SCHEMAS_PATH"] = previous_schemas_path
+
+    def test_schema_validation_can_be_disabled_for_runtime_xpath_parsing(self):
+        """
+        Parse XML without schema validation while still running runtime warnings.
+        """
+        configuration = get_archive_configuration(input_configuration("example_no_schema_runtime_xpath.xml"), validate_schema=False)
+        assert configuration("string(/archive_configurations/archive_configuration/file_mask)") == "*.txt"

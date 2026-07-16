@@ -3,11 +3,16 @@ Tests for archive engine configuration, storage, and failure handling.
 """
 
 import datetime
+import importlib
 import os
 import shutil
 import sys
+import tempfile
 import unittest
+import uuid
 from pathlib import Path
+
+from lxml import etree
 
 from aboa.datamodel.archived_files import ArchiveConfiguration, ArchivedFile, ArchiveOperation, ArchiveRootDirectory, FileToBeRemoved
 from aboa.engine import engine as engine_module
@@ -18,6 +23,7 @@ from aboa.engine.errors import (
     ArchiveFileError,
     ArchiveRecoveryError,
     ArchiveRetrievalError,
+    ProcessorError,
 )
 from aboa.engine.query import Query
 
@@ -91,6 +97,31 @@ class TestEngine(unittest.TestCase):
 
         assert self.engine.get_exit_code("RETENTION_FAILED")["status"] == 10
         assert "retention operation" in self.engine.get_exit_code("RETENTION_FAILED")["message"]
+
+    def test_engine_accepts_supplied_session_and_validates_final_removal_delay(self):
+        """
+        Accept caller-owned sessions and validate cleanup delay configuration.
+        """
+        query = Query()
+        engine = None
+        try:
+            engine = Engine(session=query.session)
+            assert engine.session is query.session
+            assert engine.query.session is query.session
+        finally:
+            if engine is not None:
+                engine.close_session()
+
+        self.engine.engine_configuration = {"ARCHIVE": {"FINAL_REMOVAL_DELAY_DAYS": None}}
+        assert self.engine._configured_final_removal_delay_days() == 30
+        self.engine.engine_configuration = {"ARCHIVE": {"FINAL_REMOVAL_DELAY_DAYS": " "}}
+        assert self.engine._configured_final_removal_delay_days() == 30
+        self.engine.engine_configuration = {"ARCHIVE": {"FINAL_REMOVAL_DELAY_DAYS": "many"}}
+        with self.assertRaises(ArchiveConfigurationError):
+            self.engine._configured_final_removal_delay_days()
+        self.engine.engine_configuration = {"ARCHIVE": {"FINAL_REMOVAL_DELAY_DAYS": -1}}
+        with self.assertRaises(ArchiveConfigurationError):
+            self.engine._configured_final_removal_delay_days()
 
     def test_archive_matching_file(self):
         """
@@ -496,6 +527,121 @@ class TestEngine(unittest.TestCase):
         assert len(error_rows) == 1
         assert len(operations) == 2
 
+    def test_duplicate_reception_reuse_can_delete_input_file(self):
+        """
+        Delete a duplicate input after reusing an existing error payload.
+        """
+        temp_root = Path(tempfile.mkdtemp(prefix="aboa_engine_duplicate_delete_"))
+        duplicate_input = temp_root / "sample.txt"
+        shutil.copy2(str(self.input_file("sample.txt")), str(duplicate_input))
+        try:
+            self.archive_and_get(self.input_file("sample.txt"))
+            self.engine.archive_file(str(duplicate_input))
+            assert duplicate_input.exists()
+
+            self.engine.archive_file(str(duplicate_input), delete=True)
+
+            assert not duplicate_input.exists()
+            assert len(list(self.archive_root.glob("error/**/*.txt"))) == 1
+        finally:
+            shutil.rmtree(str(temp_root), ignore_errors=True)
+
+    def test_archive_storage_failure_records_normal_and_error_storage_failures(self):
+        """
+        Record archive failures when normal and error-area storage both fail.
+        """
+        original_store_file = self.engine._store_file
+
+        def fail_store_file(source_path, destination_path):
+            raise OSError("storage unavailable")
+
+        try:
+            self.engine._store_file = fail_store_file
+            with self.assertRaises(ArchiveFileError):
+                self.engine.archive_file(str(self.input_file("sample.txt")))
+        finally:
+            self.engine._store_file = original_store_file
+        operations = self.engine.query.get_archive_operations(operations={"filter": "archive", "op": "like"})
+
+        assert len(operations) == 2
+        assert all(operation.status == 6 for operation in operations)
+        assert all("storage unavailable" in operation.message for operation in operations)
+
+    def test_archive_delete_removes_successfully_archived_input(self):
+        """
+        Remove a caller-owned input file after a successful archive.
+        """
+        temp_root = Path(tempfile.mkdtemp(prefix="aboa_engine_archive_delete_"))
+        input_file = temp_root / "delete_me.txt"
+        shutil.copy2(str(self.input_file("delete_me.txt")), str(input_file))
+        try:
+            self.engine.archive_file(str(input_file), delete=True)
+            archived_file = self.engine.query.get_archived_files(names={"filter": "delete_me.txt", "op": "like"})[0]
+
+            assert not input_file.exists()
+            assert os.path.exists(archived_file.path)
+        finally:
+            shutil.rmtree(str(temp_root), ignore_errors=True)
+
+    def test_retrieve_grouped_files_updates_last_access_dates(self):
+        """
+        Flatten grouped retrieval results for access-date bookkeeping.
+        """
+        self.archive_and_get(self.input_file("sample.txt"))
+        self.archive_and_get(self.input_file("sample.bin"))
+
+        grouped = self.engine.retrieve_files(group_by="file_group")
+        accessed_files = [archived_file for group in grouped.values() for archived_file in group]
+
+        assert "group_a" in grouped
+        assert "unknown" in grouped
+        assert all(archived_file.last_access_date is not None for archived_file in accessed_files)
+
+    def test_copy_retrieved_files_rejects_bad_destinations_and_missing_payloads(self):
+        """
+        Reject retrieval destinations that are files and selected payloads that are missing.
+        """
+        archived_file = self.archive_and_get(self.input_file("sample.txt"))
+        destination_file = self.archive_root / "not_a_directory"
+        destination_file.write_text("not a directory")
+
+        with self.assertRaises(ValueError):
+            self.engine._copy_retrieved_files([archived_file], str(destination_file))
+
+        destination_directory = self.archive_root / "retrieved"
+        os.unlink(archived_file.path)
+        with self.assertRaises(ValueError):
+            self.engine._copy_retrieved_files([archived_file], str(destination_directory))
+
+    def test_retrieval_destination_path_avoids_name_collisions(self):
+        """
+        Build unique retrieval output names without overwriting existing files.
+        """
+        archived_file = self.archive_and_get(self.input_file("sample.txt"))
+        destination_directory = Path(tempfile.mkdtemp(prefix="aboa_engine_retrieve_collision_"))
+        try:
+            (destination_directory / "sample.txt").write_text("existing")
+            unique_path = self.engine._build_retrieval_destination_path(str(destination_directory), archived_file)
+            Path(unique_path).write_text("existing unique")
+
+            numbered_path = self.engine._build_retrieval_destination_path(
+                str(destination_directory),
+                archived_file,
+                copied_paths={unique_path},
+            )
+            Path(numbered_path).write_text("existing numbered")
+            second_numbered_path = self.engine._build_retrieval_destination_path(
+                str(destination_directory),
+                archived_file,
+                copied_paths={unique_path},
+            )
+
+            assert unique_path.endswith("sample_{}.txt".format(archived_file.file_uuid))
+            assert numbered_path.endswith("sample_{}_1.txt".format(archived_file.file_uuid))
+            assert second_numbered_path.endswith("sample_{}_2.txt".format(archived_file.file_uuid))
+        finally:
+            shutil.rmtree(str(destination_directory), ignore_errors=True)
+
     def test_recover_files_from_trash(self):
         """
         Move a trashed payload back to its archive path and clear trash metadata.
@@ -692,3 +838,375 @@ class TestEngine(unittest.TestCase):
         assert operations[0].operation == "delete"
         assert operations[0].status == 8
         assert "deletion failed" in operations[0].message
+
+    def test_delete_rejects_purge_entries_while_moving_to_trash(self):
+        """
+        Reject incompatible physical deletion and purge-entry options.
+        """
+        with self.assertRaises(ArchiveDeletionError):
+            self.engine.delete_files(physical_delete=True, purge_entries=True)
+        operations = self.engine.query.get_archive_operations(operations={"filter": "delete", "op": "like"})
+
+        assert len(operations) == 1
+        assert "cannot be purged while moving payloads to trash" in operations[0].message
+
+    def test_recover_files_from_trash_can_select_by_trash_uuid(self):
+        """
+        Recover a trashed file by the pending-removal row UUID.
+        """
+        archived_file = self.archive_and_get(self.input_file("sample.txt"))
+        self.engine.delete_files(file_uuids=[archived_file.file_uuid], physical_delete=True)
+        queued = self.engine.query.get_files_to_be_removed(file_uuids={"filter": [archived_file.file_uuid], "op": "in"})[0]
+
+        recovered = self.engine.recover_files_from_trash(file_to_remove_uuids=[queued.file_to_remove_uuid])
+
+        assert len(recovered) == 1
+        assert recovered[0].file_uuid == archived_file.file_uuid
+
+    def test_recover_logically_deleted_file_failure_is_recorded(self):
+        """
+        Record recovery failures for logical-only rows whose payload is missing.
+        """
+        archived_file = self.archive_and_get(self.input_file("sample.txt"))
+        self.engine.delete_files(file_uuids=[archived_file.file_uuid])
+        os.unlink(archived_file.path)
+
+        with self.assertRaises(ArchiveRecoveryError):
+            self.engine.recover_files_from_trash(file_uuids=[archived_file.file_uuid])
+        operations = self.engine.query.get_archive_operations(operations={"filter": "recover", "op": "like"})
+
+        assert len(operations) == 1
+        assert operations[0].status == 13
+        assert archived_file.path in operations[0].message
+
+    def test_recover_files_from_trash_records_lookup_failures(self):
+        """
+        Convert unexpected recovery setup failures into ArchiveRecoveryError.
+        """
+        original_load_archive_configuration = self.engine._load_archive_configuration
+
+        def fail_load_archive_configuration(configuration_path=None):
+            raise ValueError("configuration lookup failed")
+
+        try:
+            self.engine._load_archive_configuration = fail_load_archive_configuration
+            with self.assertRaises(ArchiveRecoveryError):
+                self.engine.recover_files_from_trash()
+        finally:
+            self.engine._load_archive_configuration = original_load_archive_configuration
+        operations = self.engine.query.get_archive_operations(operations={"filter": "recover", "op": "like"})
+
+        assert len(operations) == 1
+        assert "configuration lookup failed" in operations[0].message
+
+    def test_record_archive_failures_without_active_root_records_operation_only(self):
+        """
+        Record archive failures even when no root directory row is available.
+        """
+        self.engine._record_archive_failures(
+            str(self.input_file("sample.txt")),
+            str(self.input_file("sample.txt")),
+            datetime.datetime.utcnow(),
+            datetime.datetime.utcnow(),
+            {},
+            None,
+            [(5, "archive failed without root")],
+            None,
+        )
+
+        archived_files = self.engine.query.get_archived_files()
+        operations = self.engine.query.get_archive_operations(operations={"filter": "archive", "op": "like"})
+
+        assert archived_files == []
+        assert len(operations) == 1
+        assert operations[0].file_uuid is None
+
+    def test_configuration_and_retention_helper_edge_cases(self):
+        """
+        Exercise configuration fallback, matching, retention, and duration guards.
+        """
+        previous_default_archive_path = os.environ.pop("ABOA_DEFAULT_ARCHIVE_PATH", None)
+        try:
+            with self.assertRaises(ArchiveConfigurationError):
+                self.engine._load_archive_configuration(str(self.inputs_path / "does_not_exist.xml"))
+        finally:
+            if previous_default_archive_path is not None:
+                os.environ["ABOA_DEFAULT_ARCHIVE_PATH"] = previous_default_archive_path
+
+        with self.assertRaises(ArchiveConfigurationError):
+            self.engine._activate_root_directory(" ")
+        assert self.engine._match_configuration("sample.txt") is None
+        assert self.engine._retention_policy_for_configuration(None) is None
+        with self.assertRaises(ArchiveConfigurationError):
+            self.engine._parse_retention_duration("not-a-duration")
+        with self.assertRaises(ArchiveConfigurationError):
+            self.engine._parse_retention_duration("P")
+
+        reception_date = datetime.datetime(2026, 7, 1, 0, 0, 0)
+        archive_date = datetime.datetime(2026, 7, 2, 0, 0, 0)
+        retention_nodes = etree.parse(str(self.input_file("engine_retention_policy_nodes.xml")))
+        reception_node = retention_nodes.xpath("/archive_configurations/archive_configuration[@file_group='reception_policy']")[0]
+        validity_node = retention_nodes.xpath("/archive_configurations/archive_configuration[@file_group='validity_policy']")[0]
+        generation_node = retention_nodes.xpath("/archive_configurations/archive_configuration[@file_group='generation_policy']")[0]
+        unknown_node = retention_nodes.xpath("/archive_configurations/archive_configuration[@file_group='unknown_policy']")[0]
+
+        assert self.engine._calculate_expiration_date(reception_node, reception_date, archive_date, {}) == reception_date + datetime.timedelta(days=2)
+        assert self.engine._calculate_expiration_date(
+            validity_node,
+            reception_date,
+            archive_date,
+            {"validity_stop_date": "2026-07-10T00:00:00"},
+        ) == datetime.datetime(2026, 7, 13, 0, 0, 0)
+        assert self.engine._calculate_expiration_date(generation_node, reception_date, archive_date, {}) is None
+        assert self.engine._calculate_expiration_date(unknown_node, reception_date, archive_date, {}) is None
+
+    def test_processor_execution_edge_cases(self):
+        """
+        Validate processor import, contract, and empty-result behavior.
+        """
+        inputs_path = str(self.inputs_path)
+        inserted_inputs_path = inputs_path not in sys.path
+        module_names = ["processor_without_process", "processor_returns_none", "processor_returns_list"]
+        try:
+            if inserted_inputs_path:
+                sys.path.insert(0, inputs_path)
+            importlib.invalidate_caches()
+
+            with self.assertRaises(ProcessorError):
+                self.engine._execute_processor("processor_does_not_exist", str(self.input_file("sample.txt")))
+            with self.assertRaises(ProcessorError):
+                self.engine._execute_processor("processor_without_process", str(self.input_file("sample.txt")))
+            assert self.engine._execute_processor("processor_returns_none", str(self.input_file("sample.txt"))) == {}
+            with self.assertRaises(ProcessorError):
+                self.engine._execute_processor("processor_returns_list", str(self.input_file("sample.txt")))
+        finally:
+            if inserted_inputs_path and inputs_path in sys.path:
+                sys.path.remove(inputs_path)
+            for module_name in module_names:
+                sys.modules.pop(module_name, None)
+
+    def test_archive_path_and_duplicate_helper_edge_cases(self):
+        """
+        Build collision-safe archive paths and ignore stale duplicate error rows.
+        """
+        archive_date = datetime.datetime(2026, 7, 16, 9, 0, 0)
+        destination_path = self.engine._build_destination_path(str(self.archive_root), "texts", archive_date, "sample.txt")
+        Path(destination_path).write_text("existing")
+        collision_path = self.engine._build_destination_path(str(self.archive_root), "texts", archive_date, "sample.txt")
+        archived_file = self.archive_and_get(self.input_file("sample.txt"))
+        stale_error_file = ArchivedFile(
+            uuid.uuid4(),
+            "sample.txt",
+            str(self.archive_root / "error" / "missing.txt"),
+            datetime.datetime.utcnow(),
+            datetime.datetime.utcnow(),
+            0,
+            archived_file.rootDirectory,
+            available=False,
+            physically_available=True,
+            checksum="abc123",
+        )
+        self.engine.session.add(stale_error_file)
+        self.engine.session.commit()
+
+        assert collision_path != destination_path
+        assert Path(collision_path).name.startswith("sample_")
+        assert self.engine._find_existing_duplicate_error_file("sample.txt", None) is None
+        assert self.engine._find_existing_duplicate_error_file("sample.txt", "abc123") is None
+
+    def test_delete_input_file_success_noop_and_failure(self):
+        """
+        Skip deleting archive payloads and record input deletion failures.
+        """
+        archived_file = self.archive_and_get(self.input_file("sample.txt"))
+        self.engine._delete_input_file(archived_file.path, archived_file)
+        original_unlink = engine_module.os.unlink
+
+        def fail_unlink(path):
+            raise OSError("cannot delete input")
+
+        try:
+            engine_module.os.unlink = fail_unlink
+            with self.assertRaises(ArchiveFileError):
+                self.engine._delete_input_file(str(self.input_file("sample.txt")), archived_file)
+        finally:
+            engine_module.os.unlink = original_unlink
+        operations = self.engine.query.get_archive_operations(operations={"filter": "archive", "op": "like"})
+
+        assert len(operations) == 1
+        assert operations[0].status == 7
+        assert "cannot delete input" in operations[0].message
+
+    def test_trash_and_permanent_delete_helper_edge_cases(self):
+        """
+        Update existing trash rows and delete queued trash payloads permanently.
+        """
+        archived_file = self.archive_and_get(self.input_file("sample.txt"))
+        root_directory = archived_file.rootDirectory
+        old_trash_path = str(self.archive_root / "trash" / "old" / "sample.txt")
+        existing_row = FileToBeRemoved(
+            uuid.uuid4(),
+            archived_file,
+            old_trash_path,
+            root_directory,
+            datetime.datetime.utcnow(),
+        )
+        self.engine.session.add(existing_row)
+        self.engine.session.commit()
+
+        updated_row = self.engine.move_archived_file_to_trash(
+            archived_file,
+            datetime.datetime(2026, 7, 16, 9, 0, 0),
+        )
+
+        assert updated_row.file_to_remove_uuid == existing_row.file_to_remove_uuid
+        assert updated_row.path != old_trash_path
+        assert os.path.exists(updated_row.path)
+
+        deleted_payload = self.engine.delete_archived_file_permanently(archived_file)
+        remaining = self.engine.query.get_files_to_be_removed(file_uuids={"filter": [archived_file.file_uuid], "op": "in"})
+
+        assert deleted_payload is True
+        assert remaining == []
+        assert archived_file.physically_available is False
+
+    def test_permanent_delete_removes_stale_trash_rows_without_payload(self):
+        """
+        Delete stale trash rows even when the queued trash payload is already gone.
+        """
+        archived_file = self.archive_and_get(self.input_file("sample.txt"))
+        self.engine.delete_files(file_uuids=[archived_file.file_uuid], physical_delete=True)
+        queued = self.engine.query.get_files_to_be_removed(file_uuids={"filter": [archived_file.file_uuid], "op": "in"})[0]
+        os.unlink(queued.path)
+
+        deleted_payload = self.engine.delete_archived_file_permanently(archived_file)
+        remaining = self.engine.query.get_files_to_be_removed(file_uuids={"filter": [archived_file.file_uuid], "op": "in"})
+
+        assert deleted_payload is False
+        assert remaining == []
+        assert archived_file.physically_available is False
+
+    def test_logical_recovery_filters_and_stale_payloads(self):
+        """
+        Build logical recovery filters and skip logical rows with missing payloads.
+        """
+        archived_file = self.archive_and_get(self.input_file("sample.txt"))
+        self.engine.delete_files(file_uuids=[archived_file.file_uuid])
+        os.unlink(archived_file.path)
+
+        assert self.engine._build_logical_recovery_filters(file_uuids=[archived_file.file_uuid]) == {
+            "available": {"filter": False, "op": "=="},
+            "file_uuids": {"filter": [archived_file.file_uuid], "op": "in"},
+        }
+        assert self.engine._build_logical_recovery_filters() == {
+            "available": {"filter": False, "op": "=="},
+        }
+        assert self.engine._build_logical_recovery_filters(filters={"paths": {"filter": "%", "op": "like"}}) is None
+        assert self.engine.get_logically_deleted_recoverable_files(file_uuids=[archived_file.file_uuid]) == []
+
+    def test_recovered_future_expiration_keeps_existing_delete_configuration(self):
+        """
+        Preserve an already assigned delete configuration for future expirations.
+        """
+        future_expiration = datetime.datetime(2099, 12, 31, 23, 59, 59)
+        archived_file = self.archive_and_get(
+            self.input_file("sample.txt"),
+            metadata={"expiration_date": future_expiration},
+        )
+        delete_configuration = archived_file.deleteArchiveConfiguration
+
+        self.engine._refresh_recovered_file_expiration(archived_file, datetime.datetime.utcnow())
+
+        assert archived_file.expiration_date == future_expiration
+        assert archived_file.deleteArchiveConfiguration is delete_configuration
+
+    def test_delete_archived_entry_removes_stale_trash_rows(self):
+        """
+        Purge inventory rows when only stale trash metadata remains.
+        """
+        archived_file = self.archive_and_get(self.input_file("sample.txt"))
+        file_uuid = archived_file.file_uuid
+        self.engine.delete_files(file_uuids=[file_uuid], physical_delete=True)
+        queued = self.engine.query.get_files_to_be_removed(file_uuids={"filter": [file_uuid], "op": "in"})[0]
+        os.unlink(queued.path)
+
+        purged = self.engine.delete_archived_file_entries(file_uuids=[file_uuid])
+        remaining_files = self.engine.query.get_archived_files(file_uuids={"filter": [file_uuid], "op": "in"})
+        remaining_trash = self.engine.query.get_files_to_be_removed(file_uuids={"filter": [file_uuid], "op": "in"})
+
+        assert len(purged) == 1
+        assert remaining_files == []
+        assert remaining_trash == []
+
+    def test_trash_path_and_recovery_guard_edge_cases(self):
+        """
+        Build collision-safe trash paths and reject unsafe recovery inputs.
+        """
+        archived_file = self.archive_and_get(self.input_file("sample.txt"))
+        removal_date = datetime.datetime(2026, 7, 16, 9, 0, 0)
+        trash_path = self.engine._build_trash_path(str(self.archive_root), removal_date, archived_file)
+        Path(trash_path).write_text("existing")
+        collision_path = self.engine._build_trash_path(str(self.archive_root), removal_date, archived_file)
+
+        assert collision_path.endswith("sample_{}.txt".format(archived_file.file_uuid))
+
+        self.engine.delete_files(file_uuids=[archived_file.file_uuid], physical_delete=True)
+        queued = self.engine.query.get_files_to_be_removed(file_uuids={"filter": [archived_file.file_uuid], "op": "in"})[0]
+        Path(archived_file.path).parent.mkdir(parents=True, exist_ok=True)
+        Path(archived_file.path).write_text("conflicting archive payload")
+        with self.assertRaises(ArchiveRecoveryError):
+            self.engine._recover_file_from_trash(queued)
+
+    def test_recover_file_from_trash_handles_flat_archive_path(self):
+        """
+        Recover a trash payload to an archive path without a directory component.
+        """
+        self.archive_and_get(self.input_file("sample.txt"))
+        root_directory = self.engine.query.get_active_root_directory()
+        archive_path = Path("flat_recover.txt")
+        trash_root = Path(tempfile.mkdtemp(prefix="aboa_engine_flat_recover_"))
+        trash_path = trash_root / "flat_recover.txt"
+        shutil.copy2(str(self.input_file("flat_recover.txt")), str(trash_path))
+        archived_file = ArchivedFile(
+            uuid.uuid4(),
+            "flat_recover.txt",
+            str(archive_path),
+            datetime.datetime.utcnow(),
+            datetime.datetime.utcnow(),
+            0,
+            root_directory,
+            available=False,
+            physically_available=True,
+        )
+        trash_row = FileToBeRemoved(uuid.uuid4(), archived_file, str(trash_path), root_directory, datetime.datetime.utcnow())
+        self.engine.session.add(archived_file)
+        self.engine.session.add(trash_row)
+        self.engine.session.commit()
+        try:
+            recovered = self.engine._recover_file_from_trash(trash_row)
+
+            assert recovered.path == str(archive_path)
+            assert archive_path.read_text() == self.input_file("flat_recover.txt").read_text()
+            assert recovered.available is True
+        finally:
+            if archive_path.exists():
+                archive_path.unlink()
+            shutil.rmtree(str(trash_root), ignore_errors=True)
+
+    def test_logical_recovery_guard_edge_cases(self):
+        """
+        Reject invalid logical recovery requests before mutating inventory.
+        """
+        available_file = self.archive_and_get(self.input_file("sample.txt"))
+        with self.assertRaises(ArchiveRecoveryError):
+            self.engine._recover_logically_deleted_file(available_file)
+
+        self.engine.delete_files(file_uuids=[available_file.file_uuid], physical_delete=True)
+        with self.assertRaises(ArchiveRecoveryError):
+            self.engine._recover_logically_deleted_file(available_file)
+
+        missing_payload_file = self.archive_and_get(self.input_file("query_a.txt"))
+        self.engine.delete_files(file_uuids=[missing_payload_file.file_uuid])
+        os.unlink(missing_payload_file.path)
+        with self.assertRaises(ArchiveRecoveryError):
+            self.engine._recover_logically_deleted_file(missing_payload_file)
