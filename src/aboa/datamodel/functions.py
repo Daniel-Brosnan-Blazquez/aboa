@@ -35,7 +35,5 @@ def read_configuration():
 
     if "ABOA_DDBB_HOST" in os.environ:
         config["DDBB_CONFIGURATION"]["host"] = os.environ["ABOA_DDBB_HOST"]
-    if "ABOA_DDBB_URL" in os.environ:
-        config["DDBB_CONFIGURATION"]["url"] = os.environ["ABOA_DDBB_URL"]
 
     return config

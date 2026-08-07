@@ -51,7 +51,7 @@ docker compose -f compose_dev.yml exec aboa aboa_retrieve --name sample.txt --li
 ```
 
 `initialize_aboa_ddbb.sh` calls `aboa_init.py -y` and recreates the configured
-database from `src/datamodel/aboa_data_model.sql`, so it deletes existing ABOA
+database from `src/aboa/datamodel/aboa_data_model.sql`, so it deletes existing ABOA
 inventory data for that database.
 
 ## Local Python Setup
@@ -67,8 +67,7 @@ python -m pip install -e "src[tests]"
 Set the runtime paths before importing or running ABOA:
 
 ```bash
-export ABOA_RESOURCES_PATH="$PWD/src/config"
-export ABOA_SCHEMAS_PATH="$PWD/src/schemas"
+export ABOA_RESOURCES_PATH="$PWD/src/aboa/config"
 export ABOA_LOG_PATH="$PWD/log"
 export ABOA_DEFAULT_ARCHIVE_PATH="/tmp/aboa_archive"
 mkdir -p "$ABOA_LOG_PATH" "$ABOA_DEFAULT_ARCHIVE_PATH"
@@ -76,13 +75,13 @@ mkdir -p "$ABOA_LOG_PATH" "$ABOA_DEFAULT_ARCHIVE_PATH"
 
 ## Runtime Configuration
 
-ABOA reads JSON and XML runtime resources from `ABOA_RESOURCES_PATH`.
+ABOA reads JSON and XML runtime resources from `ABOA_RESOURCES_PATH`. The XML
+schema is bundled with the `aboa` package.
 
 Required environment variables:
 
 - `ABOA_RESOURCES_PATH`: directory containing `datamodel.json`,
   `engine.json`, and `archive_configurations.xml`.
-- `ABOA_SCHEMAS_PATH`: directory containing `aboa_archive_configurations.xsd`.
 - `ABOA_LOG_PATH`: directory where rotating log files are written.
 
 Optional environment variables:
@@ -90,12 +89,11 @@ Optional environment variables:
 - `ABOA_DEFAULT_ARCHIVE_PATH`: fallback archive root used when the XML archive
   configuration cannot be activated.
 - `ABOA_DDBB_HOST`: overrides the host from `datamodel.json`.
-- `ABOA_DDBB_URL`: overrides the full SQLAlchemy database URL.
 - `ABOA_LOG_LEVEL`: overrides the log level from `engine.json`.
 - `ABOA_STREAM_LOG`: enables stream logging in addition to the rotating file log.
 - `ABOA_LOG_MAX_BYTES` and `ABOA_LOG_MAX_BACKUP`: override log rotation limits.
 
-`src/config/engine.json` configures logging and archive cleanup behavior:
+`src/aboa/config/engine.json` configures logging and archive cleanup behavior:
 
 ```json
 {
@@ -120,8 +118,8 @@ The reserved target directories are `unknown`, `error`, and `trash`.
 
 ## Archive Configuration XML
 
-The default configuration lives at `src/config/archive_configurations.xml`.
-ABOA validates this file with `src/schemas/aboa_archive_configurations.xsd`.
+The default configuration lives at `src/aboa/config/archive_configurations.xml`.
+ABOA validates this file with `src/aboa/schemas/aboa_archive_configurations.xsd`.
 
 ```xml
 <archive_configurations root_directory="/tmp/aboa_archive">
@@ -270,7 +268,7 @@ Important write-side methods include `archive_file`, `retrieve_files`,
 
 ## Data Model
 
-The DDBB model, stored in `src/datamodel/aboa_data_model.dbm`, is built using pgModeler. The tool is then used to generate the SQL instructions, stored in `src/datamodel/aboa_data_model.sql`, to initialize the DDBB.
+The DDBB model, stored in `src/aboa/datamodel/aboa_data_model.dbm`, is built using pgModeler. The tool is then used to generate the SQL instructions, stored in `src/aboa/datamodel/aboa_data_model.sql`, to initialize the DDBB.
 
 ![ABOA data model](doc/fig/aboa_data_model.png)
 
@@ -285,12 +283,12 @@ Main inventory tables:
 
 ## Development Layout
 
-- `src/aboa/datamodel`: SQLAlchemy model and database configuration.
+- `src/aboa/datamodel`: SQLAlchemy model, database configuration, exported SQL,
+  and pgModeler model.
 - `src/aboa/engine`: archive, query, configuration, retention, and CLI logic.
 - `src/aboa/processors`: metadata processor contract.
-- `src/config`: default runtime configuration.
-- `src/schemas`: XML schemas.
-- `src/datamodel`: exported database SQL and pgModeler model.
+- `src/aboa/config`: default runtime configuration.
+- `src/aboa/schemas`: bundled XML schemas.
 - `src/scripts`: console script entry points and database initialization helpers.
 - `src/tests`: pytest-based test suite.
 - `development_plans`: design notes, requirements, and operation flow details.
@@ -302,11 +300,9 @@ Install the test extra and run the suite from the repository root:
 
 ```bash
 python -m pip install -e "src[tests]"
-export ABOA_RESOURCES_PATH="$PWD/src/config"
-export ABOA_SCHEMAS_PATH="$PWD/src/schemas"
+export ABOA_RESOURCES_PATH="$PWD/src/aboa/config"
 export ABOA_LOG_PATH="$PWD/log"
 export ABOA_DEFAULT_ARCHIVE_PATH="/tmp/aboa_archive"
-export ABOA_DDBB_URL="sqlite:////tmp/aboa_tests.sqlite"
 mkdir -p "$ABOA_LOG_PATH" "$ABOA_DEFAULT_ARCHIVE_PATH"
 python -m pytest src/tests
 ```

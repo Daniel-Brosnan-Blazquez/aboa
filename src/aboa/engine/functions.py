@@ -13,7 +13,6 @@ from dateutil import parser
 from aboa.engine.errors import (
     AboaLogPathNotAvailable,
     AboaResourcesPathNotAvailable,
-    AboaSchemasPathNotAvailable,
     InputError,
 )
 from aboa.engine.operators import arithmetic_operators, text_operators
@@ -73,18 +72,6 @@ def get_log_path():
     if aboa_log_path is None:
         raise AboaLogPathNotAvailable("The environment variable ABOA_LOG_PATH is not defined")
     return aboa_log_path
-
-
-def get_schemas_path():
-    """
-    Return the ABOA schemas path from the environment.
-
-    :raises AboaSchemasPathNotAvailable: when ABOA_SCHEMAS_PATH is not defined
-    """
-    aboa_schemas_path = os.environ.get("ABOA_SCHEMAS_PATH")
-    if aboa_schemas_path is None:
-        raise AboaSchemasPathNotAvailable("The environment variable ABOA_SCHEMAS_PATH is not defined")
-    return aboa_schemas_path
 
 
 def read_configuration():

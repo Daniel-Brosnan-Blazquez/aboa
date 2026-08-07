@@ -2,10 +2,10 @@
 Tests for archive XML configuration parsing and schema validation.
 """
 
-import os
 import unittest
 from pathlib import Path
 
+from aboa.engine import parsing as parsing_module
 from aboa.engine.errors import ArchiveConfigurationError
 from aboa.engine.parsing import get_archive_configuration
 
@@ -176,16 +176,30 @@ class TestConfiguration(unittest.TestCase):
         """
         Convert malformed XSD files into ArchiveConfigurationError.
         """
-        previous_schemas_path = os.environ.get("ABOA_SCHEMAS_PATH")
+        original_schema_path = parsing_module._schema_path
+        broken_schema_path = str(INPUTS / "broken_schemas" / "aboa_archive_configurations.xsd")
         try:
-            os.environ["ABOA_SCHEMAS_PATH"] = str(INPUTS / "broken_schemas")
+            parsing_module._schema_path = lambda: broken_schema_path
             with self.assertRaises(ArchiveConfigurationError):
                 get_archive_configuration(input_configuration("example_basic.xml"))
         finally:
-            if previous_schemas_path is None:
-                os.environ.pop("ABOA_SCHEMAS_PATH", None)
-            else:
-                os.environ["ABOA_SCHEMAS_PATH"] = previous_schemas_path
+            parsing_module._schema_path = original_schema_path
+
+    def test_missing_schema_file_is_rejected(self):
+        """
+        Report a missing bundled XSD file explicitly.
+        """
+        original_schema_path = parsing_module._schema_path
+        missing_schema_path = str(INPUTS / "does_not_exist.xsd")
+        try:
+            parsing_module._schema_path = lambda: missing_schema_path
+            with self.assertRaises(ArchiveConfigurationError) as error:
+                get_archive_configuration(input_configuration("example_basic.xml"))
+        finally:
+            parsing_module._schema_path = original_schema_path
+
+        assert "schema file" in str(error.exception)
+        assert "does not exist" in str(error.exception)
 
     def test_schema_validation_can_be_disabled_for_runtime_xpath_parsing(self):
         """

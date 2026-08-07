@@ -18,9 +18,8 @@ services:
       hostname: aboa
       environment:
          - ABOA_DDBB_HOST=aboa_db
-         - ABOA_RESOURCES_PATH=/aboa/src/config
+         - ABOA_RESOURCES_PATH=/aboa/src/aboa/config
          - ABOA_LOG_PATH=/log
-         - ABOA_SCHEMAS_PATH=/aboa/src/schemas
          - ABOA_DEFAULT_ARCHIVE_PATH=/aboa_archive
          - PYTHONDONTWRITEBYTECODE=1
       volumes:

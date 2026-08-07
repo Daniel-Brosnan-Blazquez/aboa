@@ -24,11 +24,6 @@ class AboaLogPathNotAvailable(Error):
     pass
 
 
-class AboaSchemasPathNotAvailable(Error):
-    """Raised when the environment variable ABOA_SCHEMAS_PATH is not defined."""
-    pass
-
-
 class ArchiveConfigurationError(Error):
     """Raised when archive XML configuration is missing, malformed, or invalid."""
     pass

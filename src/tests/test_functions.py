@@ -15,7 +15,6 @@ from aboa.engine import functions as engine_functions
 from aboa.engine.errors import (
     AboaLogPathNotAvailable,
     AboaResourcesPathNotAvailable,
-    AboaSchemasPathNotAvailable,
     InputError,
 )
 from aboa.engine.xpath_functions import _xpath_match
@@ -48,35 +47,29 @@ class TestFunctions(unittest.TestCase):
         """
         os.environ.pop("ABOA_RESOURCES_PATH", None)
         os.environ.pop("ABOA_LOG_PATH", None)
-        os.environ.pop("ABOA_SCHEMAS_PATH", None)
 
         with self.assertRaises(AboaResourcesPathNotAvailable):
             engine_functions.get_resources_path()
         with self.assertRaises(AboaLogPathNotAvailable):
             engine_functions.get_log_path()
-        with self.assertRaises(AboaSchemasPathNotAvailable):
-            engine_functions.get_schemas_path()
         with self.assertRaises(datamodel_errors.AboaResourcesPathNotAvailable):
             datamodel_functions.get_resources_path()
 
-    def test_datamodel_configuration_accepts_database_environment_overrides(self):
+    def test_datamodel_configuration_accepts_database_host_environment_override(self):
         """
-        Apply datamodel database host and URL overrides from the environment.
+        Apply datamodel database host overrides from the environment.
         """
         os.environ["ABOA_DDBB_HOST"] = "db.example.test"
-        os.environ["ABOA_DDBB_URL"] = "sqlite:////tmp/aboa-test.db"
 
         configuration = datamodel_functions.read_configuration()
 
         assert configuration["DDBB_CONFIGURATION"]["host"] == "db.example.test"
-        assert configuration["DDBB_CONFIGURATION"]["url"] == "sqlite:////tmp/aboa-test.db"
 
     def test_datamodel_configuration_uses_defaults_without_host_override(self):
         """
         Leave database configuration defaults unchanged when overrides are absent.
         """
         os.environ.pop("ABOA_DDBB_HOST", None)
-        os.environ.pop("ABOA_DDBB_URL", None)
 
         configuration = datamodel_functions.read_configuration()
 

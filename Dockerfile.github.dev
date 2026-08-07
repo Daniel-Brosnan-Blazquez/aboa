@@ -30,12 +30,11 @@ RUN pip3 install wheel
 RUN mkdir /log \
     /scripts \
     /resources_path \
-    /schemas \
     /datamodel \
     /aboa_archive \
     /aboa
 
-RUN chown -R boa:boa /log /scripts /resources_path /schemas /datamodel /aboa_archive /aboa
+RUN chown -R boa:boa /log /scripts /resources_path /datamodel /aboa_archive /aboa
 
 # Create a shared folder for python packages, matching the BOA development image
 # pattern while keeping installed packages outside the source tree.
@@ -54,17 +53,14 @@ RUN git clone --branch ${GITHUB_BRANCH} ${REPOSITORY_URI}
 RUN pip3 install --use-pep517 --target=/usr/local/python-packages "/aboa/src[tests]"
 
 # Copy ABOA runtime assets to stable container paths.
-RUN cp /aboa/src/config/* /resources_path
+RUN cp /aboa/src/aboa/config/* /resources_path
 RUN cp /aboa/src/scripts/*.py /scripts
 RUN cp /aboa/src/scripts/*.sh /scripts
-RUN cp /aboa/src/datamodel/aboa_data_model.sql /datamodel
-RUN cp /aboa/src/datamodel/aboa_data_model.dbm /datamodel
-RUN cp /aboa/src/schemas/* /schemas
+RUN cp /aboa/src/aboa/datamodel/aboa_data_model.sql /datamodel
 
 # Environment variables for ABOA.
 ENV ABOA_RESOURCES_PATH=/resources_path
 ENV ABOA_LOG_PATH=/log
-ENV ABOA_SCHEMAS_PATH=/schemas
 ENV ABOA_DEFAULT_ARCHIVE_PATH=/aboa_archive
 ENV LC_ALL=en_US.utf-8
 ENV LANG=en_US.utf-8

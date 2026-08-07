@@ -11,6 +11,10 @@ setup(
     version="0.1.0",
     description="Archive for Business Operations Analysis",
     packages=find_packages(),
+    package_data={
+        "aboa": ["config/*.json", "config/*.xml", "schemas/*.xsd"],
+        "aboa.datamodel": ["*.sql"],
+    },
     python_requires=">=3",
     install_requires=[
         "sqlalchemy==1.3.22",

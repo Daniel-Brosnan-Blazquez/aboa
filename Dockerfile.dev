@@ -26,12 +26,11 @@ RUN pip3 install wheel
 # by compose_dev.yml at /aboa so live host edits are immediately visible.
 RUN mkdir /log \
     /resources_path \
-    /schemas \
     /datamodel \
     /aboa_archive \
     /aboa
 
-RUN chown -R boa:boa /log /resources_path /schemas /datamodel /aboa_archive /aboa
+RUN chown -R boa:boa /log /resources_path /datamodel /aboa_archive /aboa
 
 # Keep dependencies outside the bind-mounted source tree. Python imports prefer
 # /aboa/src, so source changes on the host are used without rebuilding the image.
@@ -50,9 +49,8 @@ ENV PYTHONPATH=/aboa/src:/usr/local/python-packages
 ENV PATH="/aboa/src/scripts:/usr/local/python-packages/bin:${PATH}"
 
 # Development paths point directly to the bind-mounted checkout.
-ENV ABOA_RESOURCES_PATH=/aboa/src/config
+ENV ABOA_RESOURCES_PATH=/aboa/src/aboa/config
 ENV ABOA_LOG_PATH=/log
-ENV ABOA_SCHEMAS_PATH=/aboa/src/schemas
 ENV ABOA_DEFAULT_ARCHIVE_PATH=/aboa_archive
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV LC_ALL=en_US.utf-8
@@ -63,6 +61,6 @@ WORKDIR /aboa
 USER boa
 
 # Install datamodel
-RUN ln -s /aboa/src/datamodel/aboa_data_model.sql /datamodel
+RUN ln -s /aboa/src/aboa/datamodel/aboa_data_model.sql /datamodel
 
 CMD ["/bin/bash", "-c", "/aboa/src/scripts/start_aboa.sh"]
