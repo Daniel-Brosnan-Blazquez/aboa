@@ -7,14 +7,13 @@ import os
 import unittest
 from pathlib import Path
 
+import aboa
 from lxml import etree
 
-from aboa.datamodel import errors as datamodel_errors
 from aboa.datamodel import functions as datamodel_functions
 from aboa.engine import functions as engine_functions
 from aboa.engine.errors import (
     AboaLogPathNotAvailable,
-    AboaResourcesPathNotAvailable,
     InputError,
 )
 from aboa.engine.xpath_functions import _xpath_match
@@ -41,19 +40,26 @@ class TestFunctions(unittest.TestCase):
         os.environ.clear()
         os.environ.update(self.environment)
 
-    def test_environment_helpers_raise_when_required_paths_are_missing(self):
+    def test_resources_path_uses_packaged_configuration_when_environment_is_missing(self):
         """
-        Report missing runtime path environment variables explicitly.
+        Resolve ABOA resources to package defaults when no environment is set.
         """
         os.environ.pop("ABOA_RESOURCES_PATH", None)
+        expected_path = str(Path(aboa.__file__).parent / "config")
+
+        assert engine_functions.get_resources_path() == expected_path
+        assert datamodel_functions.get_resources_path() == expected_path
+        assert engine_functions.read_configuration()["LOG"]["LEVEL"] == "INFO"
+        assert datamodel_functions.read_configuration()["DDBB_CONFIGURATION"]["database"] == "aboadb"
+
+    def test_log_path_still_requires_environment_variable(self):
+        """
+        Report the missing runtime log path environment variable explicitly.
+        """
         os.environ.pop("ABOA_LOG_PATH", None)
 
-        with self.assertRaises(AboaResourcesPathNotAvailable):
-            engine_functions.get_resources_path()
         with self.assertRaises(AboaLogPathNotAvailable):
             engine_functions.get_log_path()
-        with self.assertRaises(datamodel_errors.AboaResourcesPathNotAvailable):
-            datamodel_functions.get_resources_path()
 
     def test_datamodel_configuration_accepts_database_host_environment_override(self):
         """

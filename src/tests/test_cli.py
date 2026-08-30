@@ -80,7 +80,7 @@ class TestCli(unittest.TestCase):
         Convert expected archive failures into clean CLI errors.
         """
         missing_file = self.input_file("missing.txt")
-        sys.argv = ["aboa_archive", "--file", str(missing_file)]
+        sys.argv = ["aboa_archive.py", "--file", str(missing_file)]
         stderr = io.StringIO()
         with contextlib.redirect_stderr(stderr):
             with self.assertRaises(SystemExit) as context:
@@ -95,7 +95,7 @@ class TestCli(unittest.TestCase):
         Convert expected delete failures into clean CLI errors.
         """
         archived_file = self.archive_and_get(self.input_file("sample.txt"))
-        sys.argv = ["aboa_delete", "--uuid", str(archived_file.file_uuid), "--purge-entry"]
+        sys.argv = ["aboa_delete.py", "--uuid", str(archived_file.file_uuid), "--purge-entry"]
         stderr = io.StringIO()
         with contextlib.redirect_stderr(stderr):
             with self.assertRaises(SystemExit) as context:
@@ -111,7 +111,7 @@ class TestCli(unittest.TestCase):
         """
         input_file = self.input_file("sample.txt")
 
-        sys.argv = ["aboa_archive", "--file", str(input_file)]
+        sys.argv = ["aboa_archive.py", "--file", str(input_file)]
         archive_stdout = io.StringIO()
         # Commands print JSON to stdout, so the test captures and decodes the
         # command output instead of reading internal engine state directly.
@@ -119,7 +119,7 @@ class TestCli(unittest.TestCase):
             aboa_archive()
         archive_output = json.loads(archive_stdout.getvalue())
 
-        sys.argv = ["aboa_retrieve", "--name", "%.txt"]
+        sys.argv = ["aboa_retrieve.py", "--name", "%.txt"]
         retrieve_stdout = io.StringIO()
         with contextlib.redirect_stdout(retrieve_stdout):
             aboa_retrieve()
@@ -135,7 +135,7 @@ class TestCli(unittest.TestCase):
         input_file = self.input_file("sample.txt")
 
         sys.argv = [
-            "aboa_archive",
+            "aboa_archive.py",
             "--file",
             str(input_file),
             "--expiration-date",
@@ -156,7 +156,7 @@ class TestCli(unittest.TestCase):
         input_file = self.input_file("sample.txt")
 
         sys.argv = [
-            "aboa_archive",
+            "aboa_archive.py",
             "--file",
             str(input_file),
             "--expiration-date",
@@ -178,11 +178,11 @@ class TestCli(unittest.TestCase):
         """
         input_file = self.input_file("sample.txt")
 
-        sys.argv = ["aboa_archive", "-f", str(input_file)]
+        sys.argv = ["aboa_archive.py", "-f", str(input_file)]
         with contextlib.redirect_stdout(io.StringIO()):
             aboa_archive()
 
-        sys.argv = ["aboa_retrieve", "-n", "%.txt", "-l"]
+        sys.argv = ["aboa_retrieve.py", "-n", "%.txt", "-l"]
         list_stdout = io.StringIO()
         with contextlib.redirect_stdout(list_stdout):
             aboa_retrieve()
@@ -191,7 +191,7 @@ class TestCli(unittest.TestCase):
         listed_file = query.get_archived_files(names={"filter": "sample.txt", "op": "like"})[0]
         query.close_session()
 
-        sys.argv = ["aboa_retrieve", "-n", "%.txt", "-d", str(self.retrieval_root)]
+        sys.argv = ["aboa_retrieve.py", "-n", "%.txt", "-d", str(self.retrieval_root)]
         retrieve_stdout = io.StringIO()
         with contextlib.redirect_stdout(retrieve_stdout):
             aboa_retrieve()
@@ -213,7 +213,7 @@ class TestCli(unittest.TestCase):
         input_file = self.input_file("sample.txt")
         archived_file = self.archive_and_get(input_file)
 
-        sys.argv = ["aboa_delete", "--file-group", "group_a", "--list"]
+        sys.argv = ["aboa_delete.py", "--file-group", "group_a", "--list"]
         list_stdout = io.StringIO()
         with contextlib.redirect_stdout(list_stdout):
             aboa_delete()
@@ -222,7 +222,7 @@ class TestCli(unittest.TestCase):
         listed_file = query.get_archived_files(file_uuids={"filter": [archived_file.file_uuid], "op": "in"})[0]
         query.close_session()
 
-        sys.argv = ["aboa_delete", "--file-group", "group_a", "--reason", "operator_request"]
+        sys.argv = ["aboa_delete.py", "--file-group", "group_a", "--reason", "operator_request"]
         delete_stdout = io.StringIO()
         with contextlib.redirect_stdout(delete_stdout):
             aboa_delete()
@@ -246,13 +246,13 @@ class TestCli(unittest.TestCase):
         file_uuid = archived_file.file_uuid
         archive_path = archived_file.path
 
-        sys.argv = ["aboa_retrieve", "-u", str(file_uuid), "-B", "true", "-l"]
+        sys.argv = ["aboa_retrieve.py", "-u", str(file_uuid), "-B", "true", "-l"]
         list_stdout = io.StringIO()
         with contextlib.redirect_stdout(list_stdout):
             aboa_retrieve()
         list_output = json.loads(list_stdout.getvalue())
 
-        sys.argv = ["aboa_delete", "-u", str(file_uuid), "-D", "-I"]
+        sys.argv = ["aboa_delete.py", "-u", str(file_uuid), "-D", "-I"]
         delete_stdout = io.StringIO()
         with contextlib.redirect_stdout(delete_stdout):
             aboa_delete()
@@ -279,7 +279,7 @@ class TestCli(unittest.TestCase):
         trash_path = queued.path
         trash_uuid = queued.file_to_remove_uuid
 
-        sys.argv = ["aboa_recover", "--trash-uuid", str(trash_uuid)]
+        sys.argv = ["aboa_recover.py", "--trash-uuid", str(trash_uuid)]
         recover_stdout = io.StringIO()
         with contextlib.redirect_stdout(recover_stdout):
             aboa_recover()
@@ -301,13 +301,13 @@ class TestCli(unittest.TestCase):
         archive_path = archived_file.path
         self.engine.delete_files(file_uuids=[file_uuid])
 
-        sys.argv = ["aboa_recover", "--uuid", str(file_uuid), "--list"]
+        sys.argv = ["aboa_recover.py", "--uuid", str(file_uuid), "--list"]
         list_stdout = io.StringIO()
         with contextlib.redirect_stdout(list_stdout):
             aboa_recover()
         list_output = json.loads(list_stdout.getvalue())
 
-        sys.argv = ["aboa_recover", "--uuid", str(file_uuid)]
+        sys.argv = ["aboa_recover.py", "--uuid", str(file_uuid)]
         recover_stdout = io.StringIO()
         with contextlib.redirect_stdout(recover_stdout):
             aboa_recover()
@@ -334,14 +334,14 @@ class TestCli(unittest.TestCase):
         queued = self.engine.query.get_files_to_be_removed(file_uuids={"filter": [archived_file.file_uuid], "op": "in"})[0]
         trash_path = queued.path
 
-        sys.argv = ["aboa_recover", "--file-group", "group_a", "--list"]
+        sys.argv = ["aboa_recover.py", "--file-group", "group_a", "--list"]
         list_stdout = io.StringIO()
         with contextlib.redirect_stdout(list_stdout):
             aboa_recover()
         list_output = json.loads(list_stdout.getvalue())
         assert Path(trash_path).exists()
 
-        sys.argv = ["aboa_recover", "--file-group", "group_a"]
+        sys.argv = ["aboa_recover.py", "--file-group", "group_a"]
         recover_stdout = io.StringIO()
         with contextlib.redirect_stdout(recover_stdout):
             aboa_recover()
@@ -366,7 +366,7 @@ class TestCli(unittest.TestCase):
         trash_path = queued.path
         trash_uuid = queued.file_to_remove_uuid
 
-        sys.argv = ["aboa_clean_up", "--empty-trash"]
+        sys.argv = ["aboa_clean_up.py", "--empty-trash"]
         cleanup_stdout = io.StringIO()
         with contextlib.redirect_stdout(cleanup_stdout):
             aboa_clean_up()
@@ -392,7 +392,7 @@ class TestCli(unittest.TestCase):
             metadata={"expiration_date": datetime.datetime.utcnow() - datetime.timedelta(days=1)},
         )
 
-        sys.argv = ["aboa_clean_up"]
+        sys.argv = ["aboa_clean_up.py"]
         cleanup_stdout = io.StringIO()
         with contextlib.redirect_stdout(cleanup_stdout):
             aboa_clean_up()
@@ -498,9 +498,9 @@ class TestCli(unittest.TestCase):
         Reject delete invocations with conflicting modes or no selector.
         """
         for argv, message in (
-            (["aboa_delete", "--uuid", "file-1", "--physical", "--permanent"], "--physical and --permanent"),
-            (["aboa_delete", "--uuid", "file-1", "--physical", "--purge-entry"], "--physical and --purge-entry"),
-            (["aboa_delete"], "at least one archived-file filter is required"),
+            (["aboa_delete.py", "--uuid", "file-1", "--physical", "--permanent"], "--physical and --permanent"),
+            (["aboa_delete.py", "--uuid", "file-1", "--physical", "--purge-entry"], "--physical and --purge-entry"),
+            (["aboa_delete.py"], "at least one archived-file filter is required"),
         ):
             with self.subTest(argv=argv):
                 sys.argv = argv
@@ -516,7 +516,7 @@ class TestCli(unittest.TestCase):
         """
         Require a recover selector unless listing candidates.
         """
-        sys.argv = ["aboa_recover"]
+        sys.argv = ["aboa_recover.py"]
         stderr = io.StringIO()
         with contextlib.redirect_stderr(stderr):
             with self.assertRaises(SystemExit) as context:
@@ -534,7 +534,7 @@ class TestCli(unittest.TestCase):
         self.engine.delete_files(file_uuids=[archived_file.file_uuid])
         Path(archived_file.path).unlink()
 
-        sys.argv = ["aboa_recover", "--uuid", str(archived_file.file_uuid)]
+        sys.argv = ["aboa_recover.py", "--uuid", str(archived_file.file_uuid)]
         stderr = io.StringIO()
         with contextlib.redirect_stderr(stderr):
             with self.assertRaises(SystemExit) as context:

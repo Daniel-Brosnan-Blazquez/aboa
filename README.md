@@ -46,8 +46,8 @@ database container. The source checkout is mounted into the ABOA container at
 ```bash
 docker compose -f compose_dev.yml up -d --build
 docker compose -f compose_dev.yml exec aboa initialize_aboa_ddbb.sh
-docker compose -f compose_dev.yml exec aboa aboa_archive --file /aboa/src/tests/inputs/sample.txt
-docker compose -f compose_dev.yml exec aboa aboa_retrieve --name sample.txt --list
+docker compose -f compose_dev.yml exec aboa aboa_archive.py --file /aboa/src/tests/inputs/sample.txt
+docker compose -f compose_dev.yml exec aboa aboa_retrieve.py --name sample.txt --list
 ```
 
 `initialize_aboa_ddbb.sh` calls `aboa_init.py -y` and recreates the configured
@@ -152,30 +152,30 @@ the base key.
 The package installs these console commands:
 
 ```bash
-aboa_init [-f /path/to/aboa_data_model.sql] [-y]
-aboa_archive --file /path/to/file [--delete] [--expiration-date DATETIME]
-aboa_retrieve [filters] [--list] [--destination-path /path/to/output]
-aboa_delete [filters] [--physical | --permanent] [--purge-entry] [--reason TEXT]
-aboa_recover [archived-file filters | trash filters] [--list]
-aboa_clean_up [--dry-run]
-aboa_clean_up --final-removal [--dry-run]
-aboa_clean_up --empty-trash [--dry-run]
+aboa_init.py [-f /path/to/aboa_data_model.sql] [-y]
+aboa_archive.py --file /path/to/file [--delete] [--expiration-date DATETIME]
+aboa_retrieve.py [filters] [--list] [--destination-path /path/to/output]
+aboa_delete.py [filters] [--physical | --permanent] [--purge-entry] [--reason TEXT]
+aboa_recover.py [archived-file filters | trash filters] [--list]
+aboa_clean_up.py [--dry-run]
+aboa_clean_up.py --final-removal [--dry-run]
+aboa_clean_up.py --empty-trash [--dry-run]
 ```
 
 Common examples:
 
 ```bash
-aboa_archive --file /data/incoming/report.txt --delete
-aboa_archive --file /data/incoming/invoice.pdf --expiration-date 2026-12-31T00:00:00
-aboa_retrieve --name "%.txt" --order-by archive_date --descending --list
-aboa_retrieve --uuid <file_uuid> --destination-path /tmp/retrieved
-aboa_delete --uuid <file_uuid> --reason manual_delete
-aboa_delete --uuid <file_uuid> --physical
-aboa_delete --uuid <file_uuid> --permanent --purge-entry
-aboa_recover --uuid <file_uuid>
-aboa_recover --trash-uuid <file_to_remove_uuid>
-aboa_clean_up --dry-run
-aboa_clean_up --final-removal
+aboa_archive.py --file /data/incoming/report.txt --delete
+aboa_archive.py --file /data/incoming/invoice.pdf --expiration-date 2026-12-31T00:00:00
+aboa_retrieve.py --name "%.txt" --order-by archive_date --descending --list
+aboa_retrieve.py --uuid <file_uuid> --destination-path /tmp/retrieved
+aboa_delete.py --uuid <file_uuid> --reason manual_delete
+aboa_delete.py --uuid <file_uuid> --physical
+aboa_delete.py --uuid <file_uuid> --permanent --purge-entry
+aboa_recover.py --uuid <file_uuid>
+aboa_recover.py --trash-uuid <file_to_remove_uuid>
+aboa_clean_up.py --dry-run
+aboa_clean_up.py --final-removal
 ```
 
 Retrieve, delete, and recover commands share many inventory filters, including:

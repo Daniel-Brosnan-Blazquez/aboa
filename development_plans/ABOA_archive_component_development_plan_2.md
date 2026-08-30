@@ -302,11 +302,11 @@ validation before storing or activating configurations.
 
 Implement command line entry points through `setup.py` and/or scripts:
 
-- `aboa_archive --file <path> [--delete]`
-- `aboa_retrieve [filters] [--order-by field:asc|desc] [--selection all|first|last]
+- `aboa_archive.py --file <path> [--delete]`
+- `aboa_retrieve.py [filters] [--order-by field:asc|desc] [--selection all|first|last]
   [--limit N] [--offset N]`
-- `aboa_delete --uuid <uuid> [--physical]`
-- `aboa_clean_up --policy <name> [--dry-run]`
+- `aboa_delete.py --uuid <uuid> [--physical]`
+- `aboa_clean_up.py --policy <name> [--dry-run]`
 
 Use `aboa.engine.commands` for shared argument parsing and output formatting.
 

@@ -30,12 +30,12 @@ setup(
     },
     entry_points={
         "console_scripts": [
-            "aboa_init=scripts.aboa_init:main",
-            "aboa_archive=scripts.aboa_archive:main",
-            "aboa_retrieve=scripts.aboa_retrieve:main",
-            "aboa_delete=scripts.aboa_delete:main",
-            "aboa_recover=scripts.aboa_recover:main",
-            "aboa_clean_up=scripts.aboa_clean_up:main",
+            "aboa_init.py=scripts.aboa_init:main",
+            "aboa_archive.py=scripts.aboa_archive:main",
+            "aboa_retrieve.py=scripts.aboa_retrieve:main",
+            "aboa_delete.py=scripts.aboa_delete:main",
+            "aboa_recover.py=scripts.aboa_recover:main",
+            "aboa_clean_up.py=scripts.aboa_clean_up:main",
         ]
     },
 )
