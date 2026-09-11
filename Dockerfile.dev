@@ -46,7 +46,7 @@ RUN pip3 install --target=/usr/local/python-packages \
     "pytest-cov==7.0.0"
 
 ENV PYTHONPATH=/aboa/src:/usr/local/python-packages
-ENV PATH="/aboa/src/scripts:/usr/local/python-packages/bin:${PATH}"
+ENV PATH="/aboa/src/aboa/scripts:/usr/local/python-packages/bin:${PATH}"
 
 # Development paths point directly to the bind-mounted checkout.
 ENV ABOA_RESOURCES_PATH=/aboa/src/aboa/config
@@ -63,4 +63,4 @@ USER boa
 # Install datamodel
 RUN ln -s /aboa/src/aboa/datamodel/aboa_data_model.sql /datamodel
 
-CMD ["/bin/bash", "-c", "/aboa/src/scripts/start_aboa.sh"]
+CMD ["/bin/bash", "-c", "/aboa/src/aboa/scripts/start_aboa.sh"]

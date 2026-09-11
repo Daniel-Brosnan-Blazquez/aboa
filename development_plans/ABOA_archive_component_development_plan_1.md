@@ -22,7 +22,7 @@ Use this architecture for the first ABOA version:
 - Project-wide logging through `aboa.logging.Log`, using a rotating file handler,
   log format, environment-variable overrides, and custom log-level pattern.
 - JSON configuration files in `src/aboa/config`, XSD files in `src/aboa/schemas`, database
-  model artifacts in `src/aboa/datamodel`, scripts in `src/scripts`, and tests in
+  model artifacts in `src/aboa/datamodel`, scripts in `src/aboa/scripts`, and tests in
   `src/tests`.
 - Test structure based on `unittest` style and database lifecycle: instantiate
   `Query`, instantiate `Engine`, clear tables in `setUp`, and close

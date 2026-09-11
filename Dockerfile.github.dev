@@ -54,8 +54,8 @@ RUN pip3 install --use-pep517 --target=/usr/local/python-packages "/aboa/src[tes
 
 # Copy ABOA runtime assets to stable container paths.
 RUN cp /aboa/src/aboa/config/* /resources_path
-RUN cp /aboa/src/scripts/*.py /scripts
-RUN cp /aboa/src/scripts/*.sh /scripts
+RUN cp /aboa/src/aboa/scripts/*.py /scripts
+RUN cp /aboa/src/aboa/scripts/*.sh /scripts
 RUN cp /aboa/src/aboa/datamodel/aboa_data_model.sql /datamodel
 
 # Environment variables for ABOA.

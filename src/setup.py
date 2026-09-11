@@ -14,6 +14,7 @@ setup(
     package_data={
         "aboa": ["config/*.json", "config/*.xml", "schemas/*.xsd"],
         "aboa.datamodel": ["*.sql"],
+        "aboa.scripts": ["*.sh"],
     },
     python_requires=">=3",
     install_requires=[
@@ -30,12 +31,12 @@ setup(
     },
     entry_points={
         "console_scripts": [
-            "aboa_init.py=scripts.aboa_init:main",
-            "aboa_archive.py=scripts.aboa_archive:main",
-            "aboa_retrieve.py=scripts.aboa_retrieve:main",
-            "aboa_delete.py=scripts.aboa_delete:main",
-            "aboa_recover.py=scripts.aboa_recover:main",
-            "aboa_clean_up.py=scripts.aboa_clean_up:main",
+            "aboa_init.py=aboa.scripts.aboa_init:main",
+            "aboa_archive.py=aboa.scripts.aboa_archive:main",
+            "aboa_retrieve.py=aboa.scripts.aboa_retrieve:main",
+            "aboa_delete.py=aboa.scripts.aboa_delete:main",
+            "aboa_recover.py=aboa.scripts.aboa_recover:main",
+            "aboa_clean_up.py=aboa.scripts.aboa_clean_up:main",
         ]
     },
 )

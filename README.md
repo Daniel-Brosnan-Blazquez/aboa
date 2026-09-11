@@ -289,7 +289,7 @@ Main inventory tables:
 - `src/aboa/processors`: metadata processor contract.
 - `src/aboa/config`: default runtime configuration.
 - `src/aboa/schemas`: bundled XML schemas.
-- `src/scripts`: console script entry points and database initialization helpers.
+- `src/aboa/scripts`: console script entry points and database initialization helpers.
 - `src/tests`: pytest-based test suite.
 - `development_plans`: design notes, requirements, and operation flow details.
 - `doc/fig`: data model and operation-flow diagrams.
