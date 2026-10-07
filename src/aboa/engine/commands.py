@@ -523,7 +523,7 @@ def _jsonify_recover_candidates(rows, logical_files=None):
     seen_file_uuids = set()
     for row in rows:
         archived_file = row.archivedFile
-        if archived_file is None or archived_file.file_uuid in seen_file_uuids:
+        if archived_file.file_uuid in seen_file_uuids:
             continue
         files.append(archived_file)
         seen_file_uuids.add(archived_file.file_uuid)

@@ -46,12 +46,12 @@ database container. The source checkout is mounted into the ABOA container at
 ```bash
 docker compose -f compose_dev.yml up -d --build
 docker compose -f compose_dev.yml exec aboa initialize_aboa_ddbb.sh
-docker compose -f compose_dev.yml exec aboa aboa_archive --file /aboa/src/tests/inputs/sample.txt
-docker compose -f compose_dev.yml exec aboa aboa_retrieve --name sample.txt --list
+docker compose -f compose_dev.yml exec aboa aboa_archive.py --file /aboa/src/tests/inputs/sample.txt
+docker compose -f compose_dev.yml exec aboa aboa_retrieve.py --name sample.txt --list
 ```
 
 `initialize_aboa_ddbb.sh` calls `aboa_init.py -y` and recreates the configured
-database from `src/datamodel/aboa_data_model.sql`, so it deletes existing ABOA
+database from `src/aboa/datamodel/aboa_data_model.sql`, so it deletes existing ABOA
 inventory data for that database.
 
 ## Local Python Setup
@@ -67,8 +67,7 @@ python -m pip install -e "src[tests]"
 Set the runtime paths before importing or running ABOA:
 
 ```bash
-export ABOA_RESOURCES_PATH="$PWD/src/config"
-export ABOA_SCHEMAS_PATH="$PWD/src/schemas"
+export ABOA_RESOURCES_PATH="$PWD/src/aboa/config"
 export ABOA_LOG_PATH="$PWD/log"
 export ABOA_DEFAULT_ARCHIVE_PATH="/tmp/aboa_archive"
 mkdir -p "$ABOA_LOG_PATH" "$ABOA_DEFAULT_ARCHIVE_PATH"
@@ -76,13 +75,13 @@ mkdir -p "$ABOA_LOG_PATH" "$ABOA_DEFAULT_ARCHIVE_PATH"
 
 ## Runtime Configuration
 
-ABOA reads JSON and XML runtime resources from `ABOA_RESOURCES_PATH`.
+ABOA reads JSON and XML runtime resources from `ABOA_RESOURCES_PATH`. The XML
+schema is bundled with the `aboa` package.
 
 Required environment variables:
 
 - `ABOA_RESOURCES_PATH`: directory containing `datamodel.json`,
   `engine.json`, and `archive_configurations.xml`.
-- `ABOA_SCHEMAS_PATH`: directory containing `aboa_archive_configurations.xsd`.
 - `ABOA_LOG_PATH`: directory where rotating log files are written.
 
 Optional environment variables:
@@ -90,12 +89,11 @@ Optional environment variables:
 - `ABOA_DEFAULT_ARCHIVE_PATH`: fallback archive root used when the XML archive
   configuration cannot be activated.
 - `ABOA_DDBB_HOST`: overrides the host from `datamodel.json`.
-- `ABOA_DDBB_URL`: overrides the full SQLAlchemy database URL.
 - `ABOA_LOG_LEVEL`: overrides the log level from `engine.json`.
 - `ABOA_STREAM_LOG`: enables stream logging in addition to the rotating file log.
 - `ABOA_LOG_MAX_BYTES` and `ABOA_LOG_MAX_BACKUP`: override log rotation limits.
 
-`src/config/engine.json` configures logging and archive cleanup behavior:
+`src/aboa/config/engine.json` configures logging and archive cleanup behavior:
 
 ```json
 {
@@ -120,8 +118,8 @@ The reserved target directories are `unknown`, `error`, and `trash`.
 
 ## Archive Configuration XML
 
-The default configuration lives at `src/config/archive_configurations.xml`.
-ABOA validates this file with `src/schemas/aboa_archive_configurations.xsd`.
+The default configuration lives at `src/aboa/config/archive_configurations.xml`.
+ABOA validates this file with `src/aboa/schemas/aboa_archive_configurations.xsd`.
 
 ```xml
 <archive_configurations root_directory="/tmp/aboa_archive">
@@ -154,30 +152,30 @@ the base key.
 The package installs these console commands:
 
 ```bash
-aboa_init [-f /path/to/aboa_data_model.sql] [-y]
-aboa_archive --file /path/to/file [--delete] [--expiration-date DATETIME]
-aboa_retrieve [filters] [--list] [--destination-path /path/to/output]
-aboa_delete [filters] [--physical | --permanent] [--purge-entry] [--reason TEXT]
-aboa_recover [archived-file filters | trash filters] [--list]
-aboa_clean_up [--dry-run]
-aboa_clean_up --final-removal [--dry-run]
-aboa_clean_up --empty-trash [--dry-run]
+aboa_init.py [-f /path/to/aboa_data_model.sql] [-y]
+aboa_archive.py --file /path/to/file [--delete] [--expiration-date DATETIME]
+aboa_retrieve.py [filters] [--list] [--destination-path /path/to/output]
+aboa_delete.py [filters] [--physical | --permanent] [--purge-entry] [--reason TEXT]
+aboa_recover.py [archived-file filters | trash filters] [--list]
+aboa_clean_up.py [--dry-run]
+aboa_clean_up.py --final-removal [--dry-run]
+aboa_clean_up.py --empty-trash [--dry-run]
 ```
 
 Common examples:
 
 ```bash
-aboa_archive --file /data/incoming/report.txt --delete
-aboa_archive --file /data/incoming/invoice.pdf --expiration-date 2026-12-31T00:00:00
-aboa_retrieve --name "%.txt" --order-by archive_date --descending --list
-aboa_retrieve --uuid <file_uuid> --destination-path /tmp/retrieved
-aboa_delete --uuid <file_uuid> --reason manual_delete
-aboa_delete --uuid <file_uuid> --physical
-aboa_delete --uuid <file_uuid> --permanent --purge-entry
-aboa_recover --uuid <file_uuid>
-aboa_recover --trash-uuid <file_to_remove_uuid>
-aboa_clean_up --dry-run
-aboa_clean_up --final-removal
+aboa_archive.py --file /data/incoming/report.txt --delete
+aboa_archive.py --file /data/incoming/invoice.pdf --expiration-date 2026-12-31T00:00:00
+aboa_retrieve.py --name "%.txt" --order-by archive_date --descending --list
+aboa_retrieve.py --uuid <file_uuid> --destination-path /tmp/retrieved
+aboa_delete.py --uuid <file_uuid> --reason manual_delete
+aboa_delete.py --uuid <file_uuid> --physical
+aboa_delete.py --uuid <file_uuid> --permanent --purge-entry
+aboa_recover.py --uuid <file_uuid>
+aboa_recover.py --trash-uuid <file_to_remove_uuid>
+aboa_clean_up.py --dry-run
+aboa_clean_up.py --final-removal
 ```
 
 Retrieve, delete, and recover commands share many inventory filters, including:
@@ -270,7 +268,7 @@ Important write-side methods include `archive_file`, `retrieve_files`,
 
 ## Data Model
 
-The DDBB model, stored in `src/datamodel/aboa_data_model.dbm`, is built using pgModeler. The tool is then used to generate the SQL instructions, stored in `src/datamodel/aboa_data_model.sql`, to initialize the DDBB.
+The DDBB model, stored in `src/aboa/datamodel/aboa_data_model.dbm`, is built using pgModeler. The tool is then used to generate the SQL instructions, stored in `src/aboa/datamodel/aboa_data_model.sql`, to initialize the DDBB.
 
 ![ABOA data model](doc/fig/aboa_data_model.png)
 
@@ -285,13 +283,13 @@ Main inventory tables:
 
 ## Development Layout
 
-- `src/aboa/datamodel`: SQLAlchemy model and database configuration.
+- `src/aboa/datamodel`: SQLAlchemy model, database configuration, exported SQL,
+  and pgModeler model.
 - `src/aboa/engine`: archive, query, configuration, retention, and CLI logic.
 - `src/aboa/processors`: metadata processor contract.
-- `src/config`: default runtime configuration.
-- `src/schemas`: XML schemas.
-- `src/datamodel`: exported database SQL and pgModeler model.
-- `src/scripts`: console script entry points and database initialization helpers.
+- `src/aboa/config`: default runtime configuration.
+- `src/aboa/schemas`: bundled XML schemas.
+- `src/aboa/scripts`: console script entry points and database initialization helpers.
 - `src/tests`: pytest-based test suite.
 - `development_plans`: design notes, requirements, and operation flow details.
 - `doc/fig`: data model and operation-flow diagrams.
@@ -302,11 +300,9 @@ Install the test extra and run the suite from the repository root:
 
 ```bash
 python -m pip install -e "src[tests]"
-export ABOA_RESOURCES_PATH="$PWD/src/config"
-export ABOA_SCHEMAS_PATH="$PWD/src/schemas"
+export ABOA_RESOURCES_PATH="$PWD/src/aboa/config"
 export ABOA_LOG_PATH="$PWD/log"
 export ABOA_DEFAULT_ARCHIVE_PATH="/tmp/aboa_archive"
-export ABOA_DDBB_URL="sqlite:////tmp/aboa_tests.sqlite"
 mkdir -p "$ABOA_LOG_PATH" "$ABOA_DEFAULT_ARCHIVE_PATH"
 python -m pytest src/tests
 ```

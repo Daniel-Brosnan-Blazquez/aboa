@@ -194,6 +194,25 @@ class TestRetention(unittest.TestCase):
         assert operations[0].file_uuid == queued.file_uuid
         assert "permission denied" in operations[0].message
 
+    def test_final_removal_deletes_queue_row_when_payload_is_missing(self):
+        """
+        Delete queued rows even when the trash payload has already disappeared.
+        """
+        input_file = self.input_file("sample.txt")
+        archived_file = self.archive_file(input_file)
+        self.engine.delete_files(file_uuids=[archived_file.file_uuid], physical_delete=True)
+        queued = self.engine.query.get_files_to_be_removed(file_uuids={"filter": [archived_file.file_uuid], "op": "in"})[0]
+        queued.removal_date = datetime.datetime.utcnow() - datetime.timedelta(days=1)
+        os.unlink(queued.path)
+        self.engine.session.commit()
+
+        removed = apply_final_removal(self.engine)
+        remaining = self.engine.query.get_files_to_be_removed(file_uuids={"filter": [archived_file.file_uuid], "op": "in"})
+
+        assert len(removed) == 1
+        assert remaining == []
+        assert archived_file.physically_available is False
+
     def test_retention_failure_raises_specific_exception(self):
         """
         Convert retention cleanup failures into ArchiveRetentionError.
@@ -214,3 +233,24 @@ class TestRetention(unittest.TestCase):
         assert len(operations) == 1
         assert operations[0].status == 10
         assert "retention query failed" in operations[0].message
+
+    def test_final_removal_query_failure_raises_specific_exception(self):
+        """
+        Convert final-removal lookup failures into ArchiveFinalRemovalError.
+        """
+        original_get_files_ready_for_final_removal = retention_module.get_files_ready_for_final_removal
+
+        def fail_get_files_ready_for_final_removal(session, now=None, empty_trash=False):
+            raise ValueError("final removal query failed")
+
+        try:
+            retention_module.get_files_ready_for_final_removal = fail_get_files_ready_for_final_removal
+            with self.assertRaises(retention_module.ArchiveFinalRemovalError):
+                apply_final_removal(self.engine)
+        finally:
+            retention_module.get_files_ready_for_final_removal = original_get_files_ready_for_final_removal
+        operations = self.engine.query.get_archive_operations(operations={"filter": "final_removal", "op": "like"})
+
+        assert len(operations) == 1
+        assert operations[0].status == 12
+        assert "final removal query failed" in operations[0].message

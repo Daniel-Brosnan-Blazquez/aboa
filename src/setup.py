@@ -11,6 +11,11 @@ setup(
     version="0.1.0",
     description="Archive for Business Operations Analysis",
     packages=find_packages(),
+    package_data={
+        "aboa": ["config/*.json", "config/*.xml", "schemas/*.xsd"],
+        "aboa.datamodel": ["*.sql"],
+        "aboa.scripts": ["*.sh"],
+    },
     python_requires=">=3",
     install_requires=[
         "sqlalchemy==1.3.22",
@@ -26,12 +31,12 @@ setup(
     },
     entry_points={
         "console_scripts": [
-            "aboa_init=scripts.aboa_init:main",
-            "aboa_archive=scripts.aboa_archive:main",
-            "aboa_retrieve=scripts.aboa_retrieve:main",
-            "aboa_delete=scripts.aboa_delete:main",
-            "aboa_recover=scripts.aboa_recover:main",
-            "aboa_clean_up=scripts.aboa_clean_up:main",
+            "aboa_init.py=aboa.scripts.aboa_init:main",
+            "aboa_archive.py=aboa.scripts.aboa_archive:main",
+            "aboa_retrieve.py=aboa.scripts.aboa_retrieve:main",
+            "aboa_delete.py=aboa.scripts.aboa_delete:main",
+            "aboa_recover.py=aboa.scripts.aboa_recover:main",
+            "aboa_clean_up.py=aboa.scripts.aboa_clean_up:main",
         ]
     },
 )

@@ -22,7 +22,6 @@ services:
          - ABOA_DDBB_HOST=aboa_db
          - ABOA_RESOURCES_PATH=/resources_path
          - ABOA_LOG_PATH=/log
-         - ABOA_SCHEMAS_PATH=/schemas
          - ABOA_DEFAULT_ARCHIVE_PATH=/aboa_archive
       restart        : always
       shm_size: 512M

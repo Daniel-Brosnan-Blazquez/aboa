@@ -10,6 +10,9 @@ from pathlib import Path
 from aboa.processors.base_processor import BaseProcessor, process
 
 
+INPUTS = Path(__file__).parent / "inputs"
+
+
 class TestProcessors(unittest.TestCase):
     """
     Unit tests for the base processor contract.
@@ -32,7 +35,7 @@ class TestProcessors(unittest.TestCase):
         Return empty metadata from the default processor implementations.
         """
         input_file = self.test_root / "sample.txt"
-        input_file.write_text("hello")
+        shutil.copy2(str(INPUTS / "processor_sample.txt"), str(input_file))
 
         # Both the class method and module-level convenience function are valid
         # processor entry points for configured archive processors.

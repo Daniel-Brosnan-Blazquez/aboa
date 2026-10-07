@@ -21,8 +21,8 @@ Use this architecture for the first ABOA version:
 - A `Query` class for read operations and inventory filtering.
 - Project-wide logging through `aboa.logging.Log`, using a rotating file handler,
   log format, environment-variable overrides, and custom log-level pattern.
-- JSON configuration files in `src/config`, XSD files in `src/schemas`, database
-  model artifacts in `src/datamodel`, scripts in `src/scripts`, and tests in
+- JSON configuration files in `src/aboa/config`, XSD files in `src/aboa/schemas`, database
+  model artifacts in `src/aboa/datamodel`, scripts in `src/aboa/scripts`, and tests in
   `src/tests`.
 - Test structure based on `unittest` style and database lifecycle: instantiate
   `Query`, instantiate `Engine`, clear tables in `setUp`, and close
@@ -66,11 +66,11 @@ aboa/
       datamodel.json
       engine.json
       archive_configurations.xml
+    schemas/
+      aboa_archive_configurations.xsd
     datamodel/
       aboa_data_model.dbm
       aboa_data_model.sql
-    schemas/
-      aboa_archive_configurations.xsd
     scripts/
       aboa_init.py
       aboa_init_ddbb.sh
@@ -91,8 +91,8 @@ aboa/
 
 Design the PostgreSQL model in pgModeler and export both:
 
-- `src/datamodel/aboa_data_model.dbm`
-- `src/datamodel/aboa_data_model.sql`
+- `src/aboa/datamodel/aboa_data_model.dbm`
+- `src/aboa/datamodel/aboa_data_model.sql`
 
 Implement matching SQLAlchemy entities under `aboa.datamodel`.
 
@@ -143,7 +143,7 @@ Implement matching SQLAlchemy entities under `aboa.datamodel`.
 - Use SQLAlchemy classes with explicit `__tablename__`, typed columns, constructors,
   and `jsonify()` methods, with consistent entity APIs.
 - Keep database access centralized through `aboa.datamodel.base.Session`.
-- Keep database configuration in `src/config/datamodel.json`, using the
+- Keep database configuration in `src/aboa/config/datamodel.json`, using the
   `DDBB_CONFIGURATION` structure with ABOA-specific defaults.
 - Add indexes for common retrieval filters: `name`, `path`, `archive_date`,
   `generation_date`, `validity_start_date`, `validity_stop_date`, `file_group`,
@@ -262,7 +262,7 @@ while mapping fields and operators through explicit dictionaries for safer code.
 
 ## 6. Configuration XML and XSD Plan
 
-Create `src/schemas/aboa_archive_configurations.xsd` for:
+Create `src/aboa/schemas/aboa_archive_configurations.xsd` for:
 
 ```xml
 <archive_configurations root_directory="">
@@ -297,11 +297,11 @@ validation before storing or activating configurations.
 
 Implement command line entry points through `setup.py` and/or scripts:
 
-- `aboa_archive --file <path> [--delete]`
-- `aboa_retrieve [filters] [--order-by field:asc|desc] [--selection all|first|last]
+- `aboa_archive.py --file <path> [--delete]`
+- `aboa_retrieve.py [filters] [--order-by field:asc|desc] [--selection all|first|last]
   [--limit N] [--offset N]`
-- `aboa_delete --uuid <uuid> [--physical]`
-- `aboa_clean_up --policy <name> [--dry-run]`
+- `aboa_delete.py --uuid <uuid> [--physical]`
+- `aboa_clean_up.py --policy <name> [--dry-run]`
 
 Use `aboa.engine.commands` for shared argument parsing and output formatting.
 
@@ -479,7 +479,7 @@ The following points are considered closed for the first ABOA implementation:
 | 2. POSIX archive plus database inventory | hard-link filesystem storage plus PostgreSQL SQLAlchemy datamodel |
 | 3. POSIX archive | Directory creation and file operations through Python POSIX filesystem APIs |
 | 4. PostgreSQL inventory | `datamodel.json`, SQLAlchemy, pgModeler SQL |
-| 5. pgModeler design | `src/datamodel/aboa_data_model.dbm` |
+| 5. pgModeler design | `src/aboa/datamodel/aboa_data_model.dbm` |
 | 6. Metadata fields | `archived_files` table and query filters |
 | 7. Command line API | `aboa.engine.commands` and scripts |
 | 8. Metadata retrieval filters | `Query.get_archived_files` |

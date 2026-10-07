@@ -1,5 +1,4 @@
-include config/*.json
-include config/*.xml
-include schemas/*.xsd
-include datamodel/*.sql
-
+recursive-include aboa/config *.json *.xml
+recursive-include aboa/schemas *.xsd
+recursive-include aboa/scripts *.sh
+include aboa/datamodel/*.sql

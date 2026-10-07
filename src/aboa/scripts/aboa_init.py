@@ -15,25 +15,63 @@ from aboa.datamodel.functions import read_configuration
 
 config = read_configuration()
 db_configuration = config["DDBB_CONFIGURATION"]
+DEFAULT_DATAMODEL_PATH = "/datamodel/aboa_data_model.sql"
+PACKAGE_DATAMODEL_PATH = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), os.pardir, "datamodel", "aboa_data_model.sql")
+)
 
 
 def execute_command(command, success_message, check_error=True):
     """
     Execute a command and stop on failure.
     """
-    command_split = shlex.split(command)
+    if isinstance(command, str):
+        command_split = shlex.split(command)
+    else:
+        command_split = command
+    command_display = " ".join(shlex.quote(str(part)) for part in command_split)
     program = Popen(command_split, stdin=PIPE, stdout=PIPE, stderr=PIPE)
     output, error = program.communicate()
     if check_error and program.returncode != 0:
         print(
             "The execution of the command {} has ended unexpectedly with the following output: {} but the following error: {}".format(
-                command,
+                command_display,
                 str(output.decode()),
                 str(error.decode()),
             )
         )
         exit(-1)
     print(success_message)
+
+
+def resolve_datamodel_path(datamodel_path=None):
+    """
+    Resolve the SQL datamodel path used to initialize the database.
+
+    :param datamodel_path: optional path to the SQL datamodel
+    :type datamodel_path: str or None
+    :return: path to an existing SQL datamodel
+    :rtype: str
+    """
+    if datamodel_path is None:
+        datamodel_path = DEFAULT_DATAMODEL_PATH
+
+    if os.path.isfile(datamodel_path):
+        return datamodel_path
+
+    if datamodel_path == DEFAULT_DATAMODEL_PATH:
+        if os.path.isfile(PACKAGE_DATAMODEL_PATH):
+            return PACKAGE_DATAMODEL_PATH
+        print(
+            "Neither the default datamodel file {} nor the package datamodel file {} exists".format(
+                DEFAULT_DATAMODEL_PATH,
+                PACKAGE_DATAMODEL_PATH,
+            )
+        )
+        exit(-1)
+
+    print("The specified path to the datamodel file {} does not exist".format(datamodel_path))
+    exit(-1)
 
 
 def init(datamodel_path=None):
@@ -43,24 +81,25 @@ def init(datamodel_path=None):
     :param datamodel_path: optional path to the SQL datamodel
     :type datamodel_path: str or None
     """
-    if datamodel_path is not None:
-        if not os.path.isfile(datamodel_path):
-            print("The specified path to the datamodel file {} does not exist".format(datamodel_path))
-            exit(-1)
-    else:
-        # Default path for the docker environment.
-        datamodel_path = "/datamodel/aboa_data_model.sql"
+    datamodel_path = resolve_datamodel_path(datamodel_path)
 
     database_address = db_configuration["host"]
     database_port = db_configuration["port"]
     database_name = db_configuration["database"]
+    script_path = os.path.join(os.path.dirname(__file__), "aboa_init_ddbb.sh")
 
-    command = "aboa_init_ddbb.sh -h {} -p {} -d {} -f {}".format(
-        database_address,
-        database_port,
-        database_name,
-        datamodel_path,
-    )
+    command = [
+        "bash",
+        script_path,
+        "-h",
+        str(database_address),
+        "-p",
+        str(database_port),
+        "-d",
+        str(database_name),
+        "-f",
+        str(datamodel_path),
+    ]
     print("The ABOA database is going to be initialized using the datamodel SQL file {}...".format(datamodel_path))
     execute_command(command, "The ABOA database has been initialized successfully :-)")
 

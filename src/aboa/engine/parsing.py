@@ -8,14 +8,22 @@ import logging
 import os
 from collections import defaultdict
 
+import aboa
 from lxml import etree
 
 from aboa.engine.errors import ArchiveConfigurationError
-from aboa.engine.functions import get_schemas_path
 
 logger = logging.getLogger(__name__)
 
 RESERVED_FILE_DIRECTORIES = {"unknown", "trash", "error"}
+SCHEMA_FILE_NAME = "aboa_archive_configurations.xsd"
+
+
+def _schema_path():
+    """
+    Return the bundled ABOA archive-configuration schema path.
+    """
+    return os.path.join(os.path.dirname(aboa.__file__), "schemas", SCHEMA_FILE_NAME)
 
 
 def _validate_with_lxml(configuration_xml):
@@ -32,7 +40,9 @@ def _validate_with_lxml(configuration_xml):
     """
 
     # Parse schema and validate the XML file against it
-    schema_path = os.path.join(get_schemas_path(), "aboa_archive_configurations.xsd")
+    schema_path = _schema_path()
+    if not os.path.exists(schema_path):
+        raise ArchiveConfigurationError("The schema file {} does not exist".format(schema_path))
 
     # Parse the XML configuration file
     try:

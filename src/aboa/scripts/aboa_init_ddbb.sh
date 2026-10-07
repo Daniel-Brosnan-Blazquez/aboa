@@ -10,6 +10,9 @@ DATAMODEL_FILE=""
 DDBB="aboadb"
 PORT="5432"
 HOST="localhost"
+DEFAULT_DATAMODEL_FILE="/datamodel/aboa_data_model.sql"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PACKAGE_DATAMODEL_FILE="$SCRIPT_DIR/../datamodel/aboa_data_model.sql"
 
 while getopts f:d:p:h: option
 do
@@ -43,8 +46,13 @@ fi
 # Check that the sql file for filling up the DDBB exists
 if [ ! -f "$DATAMODEL_FILE" ];
 then
-    echo "ERROR: The file $DATAMODEL_FILE provided does not exist"
-    exit -1
+    if [ "$DATAMODEL_FILE" == "$DEFAULT_DATAMODEL_FILE" ] && [ -f "$PACKAGE_DATAMODEL_FILE" ];
+    then
+        DATAMODEL_FILE="$PACKAGE_DATAMODEL_FILE"
+    else
+        echo "ERROR: The file $DATAMODEL_FILE provided does not exist"
+        exit -1
+    fi
 fi
 
 # Check that there are no connections to the DDBB if exists

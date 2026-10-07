@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<archive_configurations root_directory="/tmp/aboa_test_engine_archive">
+  <archive_configuration file_group="reception_policy">
+    <retention_policy active="true" key="reception_date">P2D</retention_policy>
+  </archive_configuration>
+  <archive_configuration file_group="validity_policy">
+    <retention_policy active="true" key="validity_stop_date">P3D</retention_policy>
+  </archive_configuration>
+  <archive_configuration file_group="generation_policy">
+    <retention_policy active="true" key="generation_date">P4D</retention_policy>
+  </archive_configuration>
+  <archive_configuration file_group="unknown_policy">
+    <retention_policy active="true" key="unknown">P5D</retention_policy>
+  </archive_configuration>
+</archive_configurations>

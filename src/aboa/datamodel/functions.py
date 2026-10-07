@@ -7,18 +7,19 @@ module aboa
 import json
 import os
 
-from aboa.datamodel.errors import AboaResourcesPathNotAvailable
+import aboa
 
 
 def get_resources_path():
     """
-    Return the ABOA resources path from the environment.
+    Return the ABOA resources path.
 
-    :raises AboaResourcesPathNotAvailable: when ABOA_RESOURCES_PATH is not defined
+    Use ``ABOA_RESOURCES_PATH`` when it is defined. Otherwise, use the default
+    configuration bundled inside the ``aboa`` package.
     """
     aboa_resources_path = os.environ.get("ABOA_RESOURCES_PATH")
     if aboa_resources_path is None:
-        raise AboaResourcesPathNotAvailable("The environment variable ABOA_RESOURCES_PATH is not defined")
+        aboa_resources_path = os.path.join(os.path.dirname(aboa.__file__), "config")
     return aboa_resources_path
 
 
@@ -35,7 +36,5 @@ def read_configuration():
 
     if "ABOA_DDBB_HOST" in os.environ:
         config["DDBB_CONFIGURATION"]["host"] = os.environ["ABOA_DDBB_HOST"]
-    if "ABOA_DDBB_URL" in os.environ:
-        config["DDBB_CONFIGURATION"]["url"] = os.environ["ABOA_DDBB_URL"]
 
     return config
