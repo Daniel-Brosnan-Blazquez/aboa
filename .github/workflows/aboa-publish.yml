@@ -48,8 +48,6 @@ jobs:
       matrix:
         python: ["3.9", "3.12"]
         distribution: [wheel, sdist]
-    env:
-      ABOA_LOG_PATH: ${{ runner.temp }}/aboa-log
     steps:
       - uses: actions/checkout@v6
         with:
@@ -75,6 +73,8 @@ jobs:
       - name: Check installed resources and console commands
         run: python tools/check_distribution.py dist --installed
       - name: Test packaged resources, configuration, and logging
+        env:
+          ABOA_LOG_PATH: ${{ runner.temp }}/aboa-log
         run: >-
           python -m pytest -q
           src/tests/test_package_resources.py
