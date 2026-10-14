@@ -1,9 +1,14 @@
 # Base the image on Rocky Linux (Red Hat compatible)
 FROM rockylinux:9
 
+# Match the host user's IDs so bind-mounted files have the expected ownership.
+ARG UID_HOST_USER=1000
+ARG GID_HOST_USER=1000
+
 USER root
 
-RUN useradd -m -r boa
+RUN groupadd --gid "${GID_HOST_USER}" boa \
+    && useradd -m --uid "${UID_HOST_USER}" --gid "${GID_HOST_USER}" boa
 
 RUN yum install -y epel-release
 

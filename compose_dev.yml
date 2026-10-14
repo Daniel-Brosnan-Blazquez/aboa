@@ -13,6 +13,9 @@ services:
       build:
          context: .
          dockerfile: Dockerfile.dev
+         args:
+            UID_HOST_USER: ${UID_HOST_USER:-1000}
+            GID_HOST_USER: ${GID_HOST_USER:-1000}
       container_name: aboa
       restart: always
       hostname: aboa

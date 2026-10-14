@@ -13,6 +13,7 @@ through `aboa.engine.engine.Engine` and `aboa.engine.query.Query`.
 - [What ABOA Provides](#what-aboa-provides)
 - [Quick Start With Docker](#quick-start-with-docker)
 - [Local Python Setup](#local-python-setup)
+- [Install From PyPI](#install-from-pypi)
 - [Runtime Configuration](#runtime-configuration)
 - [Archive Configuration XML](#archive-configuration-xml)
 - [Command Line Tools](#command-line-tools)
@@ -21,6 +22,7 @@ through `aboa.engine.engine.Engine` and `aboa.engine.query.Query`.
 - [Data Model](#data-model)
 - [Development Layout](#development-layout)
 - [Tests](#tests)
+- [Publishing](#publishing)
 
 ## What ABOA Provides
 
@@ -56,12 +58,13 @@ inventory data for that database.
 
 ## Local Python Setup
 
-For local development outside Docker, install the package from `src/setup.py`:
+For local development outside Docker, use Python 3.9 or newer and install from
+the repository root:
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install -e "src[tests]"
+python -m pip install -e ".[tests]"
 ```
 
 Set the runtime paths before importing or running ABOA:
@@ -73,19 +76,45 @@ export ABOA_DEFAULT_ARCHIVE_PATH="/tmp/aboa_archive"
 mkdir -p "$ABOA_LOG_PATH" "$ABOA_DEFAULT_ARCHIVE_PATH"
 ```
 
+## Install From PyPI
+
+Install ABOA in a virtual environment on a POSIX system with Python 3.9 or newer using pip:
+
+```bash
+python -m pip install aboa
+```
+
+ABOA requires a PostgreSQL server and the PostgreSQL `psql` command to initialize
+the database. Copy the bundled defaults to a writable configuration directory:
+
+```bash
+export ABOA_RESOURCES_PATH="$PWD/aboa-config"
+export ABOA_LOG_PATH="$PWD/log"
+export ABOA_DEFAULT_ARCHIVE_PATH="$PWD/archive"
+mkdir -p "$ABOA_RESOURCES_PATH" "$ABOA_LOG_PATH" "$ABOA_DEFAULT_ARCHIVE_PATH"
+python -c 'import os, shutil, aboa; from pathlib import Path; shutil.copytree(Path(aboa.__file__).parent / "config", os.environ["ABOA_RESOURCES_PATH"], dirs_exist_ok=True)'
+```
+
+Edit `datamodel.json` for the database connection and set `root_directory` in
+`archive_configurations.xml` to the archive directory. Then run `aboa_init.py`
+and follow its confirmation prompt. Initialization requires PostgreSQL
+administrator access and recreates the configured database.
+
 ## Runtime Configuration
 
-ABOA reads JSON and XML runtime resources from `ABOA_RESOURCES_PATH`. The XML
-schema is bundled with the `aboa` package.
+ABOA reads JSON and XML runtime resources from `ABOA_RESOURCES_PATH`, falling
+back to bundled defaults when it is unset. The XML schema is bundled with the
+`aboa` package.
 
 Required environment variables:
 
-- `ABOA_RESOURCES_PATH`: directory containing `datamodel.json`,
-  `engine.json`, and `archive_configurations.xml`.
 - `ABOA_LOG_PATH`: directory where rotating log files are written.
 
 Optional environment variables:
 
+- `ABOA_RESOURCES_PATH`: directory containing `datamodel.json`,
+  `engine.json`, and `archive_configurations.xml`; defaults to the packaged
+  configuration directory.
 - `ABOA_DEFAULT_ARCHIVE_PATH`: fallback archive root used when the XML archive
   configuration cannot be activated.
 - `ABOA_DDBB_HOST`: overrides the host from `datamodel.json`.
@@ -232,45 +261,45 @@ Important write-side methods include `archive_file`, `retrieve_files`,
 
 ### Shared Operation Rules
 
-![ABOA shared operation rules](doc/fig/aboa_shared_operation_rules.svg)
+![ABOA shared operation rules](https://raw.githubusercontent.com/Daniel-Brosnan-Blazquez/aboa/main/doc/fig/aboa_shared_operation_rules.svg)
 
 ### Load Archive Configuration
 
-![ABOA load archive configuration flow](doc/fig/aboa_load_archive_configuration_flow.svg)
+![ABOA load archive configuration flow](https://raw.githubusercontent.com/Daniel-Brosnan-Blazquez/aboa/main/doc/fig/aboa_load_archive_configuration_flow.svg)
 
 ### Archive Operation
 
-![ABOA archive operation flow](doc/fig/aboa_archive_operation_flow.svg)
+![ABOA archive operation flow](https://raw.githubusercontent.com/Daniel-Brosnan-Blazquez/aboa/main/doc/fig/aboa_archive_operation_flow.svg)
 
 ### Retrieve Operation
 
-![ABOA retrieve operation flow](doc/fig/aboa_retrieve_operation_flow.svg)
+![ABOA retrieve operation flow](https://raw.githubusercontent.com/Daniel-Brosnan-Blazquez/aboa/main/doc/fig/aboa_retrieve_operation_flow.svg)
 
 ### Delete Operation
 
-![ABOA delete operation flow](doc/fig/aboa_delete_operation_flow.svg)
+![ABOA delete operation flow](https://raw.githubusercontent.com/Daniel-Brosnan-Blazquez/aboa/main/doc/fig/aboa_delete_operation_flow.svg)
 
 ### Physical Deletion And Trash
 
-![ABOA physical deletion and trash flow](doc/fig/aboa_physical_deletion_trash_flow.svg)
+![ABOA physical deletion and trash flow](https://raw.githubusercontent.com/Daniel-Brosnan-Blazquez/aboa/main/doc/fig/aboa_physical_deletion_trash_flow.svg)
 
 ### Recovery Operation
 
-![ABOA recovery operation flow](doc/fig/aboa_recovery_operation_flow.svg)
+![ABOA recovery operation flow](https://raw.githubusercontent.com/Daniel-Brosnan-Blazquez/aboa/main/doc/fig/aboa_recovery_operation_flow.svg)
 
 ### Retention Cleanup
 
-![ABOA retention cleanup flow](doc/fig/aboa_retention_cleanup_flow.svg)
+![ABOA retention cleanup flow](https://raw.githubusercontent.com/Daniel-Brosnan-Blazquez/aboa/main/doc/fig/aboa_retention_cleanup_flow.svg)
 
 ### Final Removal Cleanup
 
-![ABOA final removal cleanup flow](doc/fig/aboa_final_removal_cleanup_flow.svg)
+![ABOA final removal cleanup flow](https://raw.githubusercontent.com/Daniel-Brosnan-Blazquez/aboa/main/doc/fig/aboa_final_removal_cleanup_flow.svg)
 
 ## Data Model
 
 The DDBB model, stored in `src/aboa/datamodel/aboa_data_model.dbm`, is built using pgModeler. The tool is then used to generate the SQL instructions, stored in `src/aboa/datamodel/aboa_data_model.sql`, to initialize the DDBB.
 
-![ABOA data model](doc/fig/aboa_data_model.png)
+![ABOA data model](https://raw.githubusercontent.com/Daniel-Brosnan-Blazquez/aboa/main/doc/fig/aboa_data_model.png)
 
 Main inventory tables:
 
@@ -299,10 +328,16 @@ Main inventory tables:
 Install the test extra and run the suite from the repository root:
 
 ```bash
-python -m pip install -e "src[tests]"
+python -m pip install -e ".[tests]"
 export ABOA_RESOURCES_PATH="$PWD/src/aboa/config"
 export ABOA_LOG_PATH="$PWD/log"
 export ABOA_DEFAULT_ARCHIVE_PATH="/tmp/aboa_archive"
 mkdir -p "$ABOA_LOG_PATH" "$ABOA_DEFAULT_ARCHIVE_PATH"
 python -m pytest src/tests
 ```
+
+## Publishing
+
+See [the publishing guide](https://github.com/Daniel-Brosnan-Blazquez/aboa/blob/main/doc/publishing.md)
+for local build checks, PyPI Trusted Publisher setup, and the GitHub release
+workflow. Package metadata and the release version live in `pyproject.toml`.
