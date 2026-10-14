@@ -5,7 +5,7 @@ services:
       container_name: aboa_db
       restart: always
       shm_size: 512M
-      command: -c max_connections=5000 -c max_locks_per_transaction=5000
+      command: -c max_connections=100 -c max_locks_per_transaction=128
       networks:
          - boa_network
 

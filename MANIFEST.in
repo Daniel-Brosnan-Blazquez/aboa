@@ -1,0 +1,3 @@
+include README.md LICENSE AUTHORS
+prune src/tests
+global-exclude __pycache__ *.py[cod] .coverage

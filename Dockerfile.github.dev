@@ -50,7 +50,7 @@ USER boa
 RUN git clone --branch ${GITHUB_BRANCH} ${REPOSITORY_URI}
 
 # Install ABOA and the test extra dependencies.
-RUN pip3 install --use-pep517 --target=/usr/local/python-packages "/aboa/src[tests]"
+RUN pip3 install --use-pep517 --target=/usr/local/python-packages "/aboa[tests]"
 
 # Copy ABOA runtime assets to stable container paths.
 RUN cp /aboa/src/aboa/config/* /resources_path

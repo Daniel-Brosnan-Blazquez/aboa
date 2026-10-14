@@ -1,0 +1,101 @@
+name: ABOA packaging and PyPI publishing using GitHub Actions
+
+on:
+  push:
+    branches: ["*"]
+  pull_request:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build and check distributions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install build tools
+        run: python -m pip install build twine
+      - name: Test the distribution checker
+        run: python -m unittest discover -s tools -p 'test_*.py'
+      - name: Build wheel and source distribution
+        run: python -m build
+      - name: Validate metadata, resources, and release version
+        env:
+          RELEASE_TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || '' }}
+        run: |
+          python -m twine check --strict dist/*
+          python tools/check_distribution.py dist --tag "$RELEASE_TAG"
+      - uses: actions/upload-artifact@v5
+        with:
+          name: python-distributions
+          path: dist/*
+          if-no-files-found: error
+
+  test-install:
+    name: Test installed ${{ matrix.distribution }} on Python ${{ matrix.python }}
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.9", "3.12"]
+        distribution: [wheel, sdist]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: actions/download-artifact@v6
+        with:
+          name: python-distributions
+          path: dist
+      - name: Install release artifact and test dependencies
+        env:
+          DISTRIBUTION: ${{ matrix.distribution }}
+        run: |
+          if [ "$DISTRIBUTION" = wheel ]; then
+            python -m pip install dist/*.whl
+          else
+            python -m pip install dist/*.tar.gz
+          fi
+          python -m pip install pytest==8.4.2 pytest-cov==7.0.0
+          python -m pip check
+      - name: Check installed resources and console commands
+        run: python tools/check_distribution.py dist --installed
+      - name: Test packaged resources, configuration, and logging
+        env:
+          ABOA_LOG_PATH: ${{ runner.temp }}/aboa-log
+        run: >-
+          python -m pytest -q
+          src/tests/test_package_resources.py
+          src/tests/test_configuration.py
+          src/tests/test_functions.py
+          src/tests/test_logging.py
+
+  publish:
+    name: Publish to PyPI
+    if: github.event_name == 'release'
+    needs: [build, test-install]
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/aboa/
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v6
+        with:
+          name: python-distributions
+          path: dist
+      - name: Publish with PyPI Trusted Publishing
+        uses: pypa/gh-action-pypi-publish@release/v1
