@@ -35,23 +35,14 @@ RUN mkdir /log \
     /aboa_archive \
     /aboa
 
+# Install ABOA in editable mode so the mounted checkout supplies live Python code.
+COPY . /aboa
+
+RUN python3 -m pip install --use-pep517 --editable "/aboa[tests]"
+
 RUN chown -R boa:boa /log /resources_path /datamodel /aboa_archive /aboa
 
-# Keep dependencies outside the bind-mounted source tree. Python imports prefer
-# /aboa/src, so source changes on the host are used without rebuilding the image.
-RUN mkdir /usr/local/python-packages
-RUN chown -R boa:boa /usr/local/python-packages
-
-RUN pip3 install --target=/usr/local/python-packages \
-    "sqlalchemy==1.3.22" \
-    "psycopg2-binary==2.9.11" \
-    "python-dateutil==2.9.0.post0" \
-    "lxml==6.0.2" \
-    "pytest==8.4.2" \
-    "pytest-cov==7.0.0"
-
-ENV PYTHONPATH=/aboa/src:/usr/local/python-packages
-ENV PATH="/aboa/src/aboa/scripts:/usr/local/python-packages/bin:${PATH}"
+ENV PATH="/aboa/src/aboa/scripts:${PATH}"
 
 # Development paths point directly to the bind-mounted checkout.
 ENV ABOA_RESOURCES_PATH=/aboa/src/aboa/config
