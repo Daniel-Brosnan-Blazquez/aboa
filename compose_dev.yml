@@ -1,8 +1,11 @@
 services:
 
    aboa_db:
-      image: mdillon/postgis
+      image: postgis/postgis
       container_name: aboa_db
+      environment:
+         # Development only: ABOA and its initialization scripts connect without passwords.
+         POSTGRES_HOST_AUTH_METHOD: trust
       restart: always
       shm_size: 512M
       command: -c max_connections=100 -c max_locks_per_transaction=128

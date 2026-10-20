@@ -45,6 +45,11 @@ The development compose file starts an ABOA container and a PostgreSQL/PostGIS
 database container. The source checkout is mounted into the ABOA container at
 `/aboa`.
 
+Both development Compose files set `POSTGRES_HOST_AUTH_METHOD=trust` to support
+the passwordless connections used by ABOA and its database initialization scripts.
+The database port is not published to the host, but containers on `boa_network`
+can connect without a password. Use these settings only for development.
+
 ```bash
 docker compose -f compose_dev.yml up -d --build
 docker compose -f compose_dev.yml exec aboa initialize_aboa_ddbb.sh
