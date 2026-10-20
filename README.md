@@ -51,7 +51,7 @@ The database port is not published to the host, but containers on `boa_network`
 can connect without a password. Use these settings only for development.
 
 ```bash
-docker compose -f compose_dev.yml up -d --build
+UID_HOST_USER=$(id -u) GID_HOST_USER=$(id -g) docker compose -f compose_dev.yml up -d --build
 docker compose -f compose_dev.yml exec aboa initialize_aboa_ddbb.sh
 docker compose -f compose_dev.yml exec aboa aboa_archive.py --file /aboa/src/tests/inputs/sample.txt
 docker compose -f compose_dev.yml exec aboa aboa_retrieve.py --name sample.txt --list
